@@ -229,6 +229,103 @@ The workflow uses **graceful degradation**:
 # Logs capture exactly what happened
 ```
 
+## LLM-Based Poetry Generation
+
+The demo supports two generation modes:
+
+### Template Mode (Default)
+
+Uses pre-written haiku and sonnet templates. Fast, free, and reliable.
+
+```json
+{
+  "generation_mode": "template"
+}
+```
+
+### LLM Mode
+
+Generates unique, creative poems using a language model. Requires API access.
+
+```json
+{
+  "generation_mode": "llm",
+  "llm_provider": "together",
+  "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+}
+```
+
+### Setup for LLM Mode
+
+#### Option 1: Together.ai (Recommended - Free Tier Available)
+
+1. Sign up at https://www.together.ai/
+2. Get your API key from https://api.together.xyz/settings/api-keys
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Set your API key:
+   ```bash
+   export TOGETHER_API_KEY="your-api-key-here"
+   ```
+5. Update `config.json`:
+   ```json
+   {
+     "generation_mode": "llm",
+     "llm_provider": "together",
+     "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+   }
+   ```
+
+Available free models on Together.ai:
+- `meta-llama/Llama-3.3-70B-Instruct-Turbo-Free` (recommended)
+- `meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo-Free`
+- `meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo-Free`
+
+See more at: https://www.together.ai/models
+
+#### Option 2: HuggingFace Inference API
+
+1. Sign up at https://huggingface.co/
+2. Get your API token from https://huggingface.co/settings/tokens
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Set your API token:
+   ```bash
+   export HUGGINGFACE_API_TOKEN="your-token-here"
+   ```
+5. Update `config.json`:
+   ```json
+   {
+     "generation_mode": "llm",
+     "llm_provider": "huggingface",
+     "llm_model": "meta-llama/Meta-Llama-3-8B-Instruct"
+   }
+   ```
+
+### Running with LLM Mode
+
+Once configured, run normally:
+
+```bash
+python3 orchestrator.py
+```
+
+You'll see LLM-specific output:
+
+```
+[orchestrator] Launching poetry agent for basketball (attempt 1)
+Agent basketball: Starting poetry generation (mode: llm, provider: together)
+Agent basketball: Wrote haiku (3 lines)
+Agent basketball: Wrote sonnet (14 lines)
+Agent basketball: Complete
+```
+
+The generated poems will be unique for each sport and each run!
+
 ## Customization
 
 ### Add More Sports
@@ -253,24 +350,24 @@ orchestrator = SportsPoetryOrchestrator(retry_enabled=False)
 2. Update `analyzer_agent.py` to analyze new forms
 3. Update `metadata.json` structure
 
-### Use Real LLM
+### Switch Generation Modes
 
-Replace template generation in `poetry_agent.py`:
+Template mode (fast, deterministic):
+```bash
+# Edit config.json
+{
+  "generation_mode": "template"
+}
+```
 
-```python
-import anthropic
-
-def generate_haiku(sport: str) -> list:
-    client = anthropic.Anthropic(api_key="your-key")
-    message = client.messages.create(
-        model="claude-sonnet-4-5-20250929",
-        max_tokens=1024,
-        messages=[{
-            "role": "user",
-            "content": f"Write a haiku about {sport}. Use 5-7-5 syllable structure."
-        }]
-    )
-    return message.content[0].text.split("\n")
+LLM mode (creative, unique):
+```bash
+# Edit config.json
+{
+  "generation_mode": "llm",
+  "llm_provider": "together",
+  "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+}
 ```
 
 ## Advanced Usage

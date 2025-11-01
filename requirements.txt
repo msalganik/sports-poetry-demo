@@ -1,0 +1,2 @@
+# LLM provider for poetry generation
+together>=1.0.0  # Together.ai - includes free models

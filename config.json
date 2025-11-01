@@ -1,10 +1,13 @@
 {
   "sports": [
-    "soccer",
-    "field hockey",
-    "ice hockey"
+    "cricket",
+    "rugby",
+    "table tennis"
   ],
-  "timestamp": "2025-11-01T13:05:00Z",
-  "session_id": "demo_001",
-  "retry_enabled": true
+  "timestamp": "2025-11-01T18:05:00Z",
+  "session_id": "demo_005",
+  "retry_enabled": true,
+  "generation_mode": "llm",
+  "llm_provider": "together",
+  "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
 }

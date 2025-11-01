@@ -145,7 +145,7 @@ class SportsPoetryOrchestrator:
         try:
             # Launch the poetry agent as a subprocess
             result = subprocess.run(
-                [sys.executable, "poetry_agent.py", sport, str(self.session_dir)],
+                [sys.executable, "poetry_agent.py", sport, str(self.session_dir), self.config_path],
                 capture_output=True,
                 text=True,
                 timeout=120  # 2 minute timeout

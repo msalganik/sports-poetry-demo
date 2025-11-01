@@ -123,28 +123,180 @@ SONNET_TEMPLATES = {
 }
 
 
-def generate_haiku(sport: str) -> list:
+def generate_haiku_together(sport: str, model: str, api_token: str) -> list:
+    """Generate a haiku using Together.ai API."""
+    try:
+        from together import Together
+    except ImportError:
+        raise ImportError(
+            "together is required for Together.ai. "
+            "Install it with: pip install -r requirements.txt"
+        )
+
+    client = Together(api_key=api_token)
+
+    prompt = f"""Write a haiku about {sport}.
+Follow the traditional 5-7-5 syllable structure.
+Capture the essence and excitement of the sport.
+Return only the haiku, no other text."""
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=100,
+            temperature=0.7
+        )
+        # Extract text from response
+        text = response.choices[0].message.content
+        # Parse response into lines
+        lines = [line.strip() for line in text.strip().split('\n') if line.strip()]
+        # Return first 3 non-empty lines
+        return lines[:3] if len(lines) >= 3 else lines
+    except Exception as e:
+        raise RuntimeError(f"Together.ai API error: {e}")
+
+
+def generate_sonnet_together(sport: str, model: str, api_token: str) -> list:
+    """Generate a sonnet using Together.ai API."""
+    try:
+        from together import Together
+    except ImportError:
+        raise ImportError(
+            "together is required for Together.ai. "
+            "Install it with: pip install -r requirements.txt"
+        )
+
+    client = Together(api_key=api_token)
+
+    prompt = f"""Write a 14-line sonnet about {sport}.
+Use iambic pentameter if possible.
+Explore deeper themes of competition, skill, and human achievement.
+Return only the sonnet, no other text."""
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=300,
+            temperature=0.7
+        )
+        # Extract text from response
+        text = response.choices[0].message.content
+        # Parse response into lines
+        lines = [line.strip() for line in text.strip().split('\n') if line.strip()]
+        return lines
+    except Exception as e:
+        raise RuntimeError(f"Together.ai API error: {e}")
+
+
+def generate_haiku_llm(sport: str, model: str, api_token: str) -> list:
+    """Generate a haiku using HuggingFace Inference API."""
+    try:
+        from huggingface_hub import InferenceClient
+    except ImportError:
+        raise ImportError(
+            "huggingface-hub is required for LLM mode. "
+            "Install it with: pip install -r requirements.txt"
+        )
+
+    client = InferenceClient(token=api_token)
+
+    prompt = f"""Write a haiku about {sport}.
+Follow the traditional 5-7-5 syllable structure.
+Capture the essence and excitement of the sport.
+Return only the haiku, no other text."""
+
+    try:
+        response = client.text_generation(
+            prompt,
+            model=model,
+            max_new_tokens=100,
+            temperature=0.7
+        )
+        # Parse response into lines
+        lines = [line.strip() for line in response.strip().split('\n') if line.strip()]
+        # Return first 3 non-empty lines
+        return lines[:3] if len(lines) >= 3 else lines
+    except Exception as e:
+        raise RuntimeError(f"HuggingFace API error: {e}")
+
+
+def generate_sonnet_llm(sport: str, model: str, api_token: str) -> list:
+    """Generate a sonnet using HuggingFace Inference API."""
+    try:
+        from huggingface_hub import InferenceClient
+    except ImportError:
+        raise ImportError(
+            "huggingface-hub is required for LLM mode. "
+            "Install it with: pip install -r requirements.txt"
+        )
+
+    client = InferenceClient(token=api_token)
+
+    prompt = f"""Write a 14-line sonnet about {sport}.
+Use iambic pentameter if possible.
+Explore deeper themes of competition, skill, and human achievement.
+Return only the sonnet, no other text."""
+
+    try:
+        response = client.text_generation(
+            prompt,
+            model=model,
+            max_new_tokens=300,
+            temperature=0.7
+        )
+        # Parse response into lines
+        lines = [line.strip() for line in response.strip().split('\n') if line.strip()]
+        return lines
+    except Exception as e:
+        raise RuntimeError(f"HuggingFace API error: {e}")
+
+
+def generate_haiku(sport: str, generation_mode: str = "template",
+                  llm_model: str = None, api_token: str = None, llm_provider: str = "huggingface") -> list:
     """Generate a haiku about the sport (5-7-5 syllable structure)."""
-    # In production: Call LLM API here
-    # Example: response = anthropic.messages.create(
-    #     model="claude-sonnet-4-5-20250929",
-    #     messages=[{"role": "user", "content": f"Write a haiku about {sport}..."}]
-    # )
+    if generation_mode == "llm":
+        if not api_token:
+            raise ValueError(
+                f"LLM mode requires API token environment variable. "
+                f"For Together.ai: TOGETHER_API_KEY, For HuggingFace: HUGGINGFACE_API_TOKEN"
+            )
+        if not llm_model:
+            raise ValueError("LLM mode requires llm_model in config")
 
-    template = HAIKU_TEMPLATES.get(sport.lower(), HAIKU_TEMPLATES["default"])
-    return template
+        # Route to appropriate provider
+        if llm_provider == "together":
+            return generate_haiku_together(sport, llm_model, api_token)
+        else:  # default to huggingface
+            return generate_haiku_llm(sport, llm_model, api_token)
+    else:
+        # Template mode (default)
+        template = HAIKU_TEMPLATES.get(sport.lower(), HAIKU_TEMPLATES["default"])
+        return template
 
 
-def generate_sonnet(sport: str) -> list:
+def generate_sonnet(sport: str, generation_mode: str = "template",
+                   llm_model: str = None, api_token: str = None, llm_provider: str = "huggingface") -> list:
     """Generate a 14-line sonnet about the sport."""
-    # In production: Call LLM API here
-    # Example: response = anthropic.messages.create(
-    #     model="claude-sonnet-4-5-20250929",
-    #     messages=[{"role": "user", "content": f"Write a sonnet about {sport}..."}]
-    # )
+    if generation_mode == "llm":
+        if not api_token:
+            raise ValueError(
+                f"LLM mode requires API token environment variable. "
+                f"For Together.ai: TOGETHER_API_KEY, For HuggingFace: HUGGINGFACE_API_TOKEN"
+            )
+        if not llm_model:
+            raise ValueError("LLM mode requires llm_model in config")
 
-    template = SONNET_TEMPLATES.get(sport.lower(), SONNET_TEMPLATES["default"])
-    return template
+        # Route to appropriate provider
+        if llm_provider == "together":
+            return generate_sonnet_together(sport, llm_model, api_token)
+        else:  # default to huggingface
+            return generate_sonnet_llm(sport, llm_model, api_token)
+    else:
+        # Template mode (default)
+        template = SONNET_TEMPLATES.get(sport.lower(), SONNET_TEMPLATES["default"])
+        return template
 
 
 def count_words(lines: list) -> int:
@@ -153,22 +305,50 @@ def count_words(lines: list) -> int:
 
 
 def main():
+    import os
+
     if len(sys.argv) < 2:
         print("Error: Sport name required", file=sys.stderr)
         sys.exit(1)
 
     sport = sys.argv[1]
     session_dir = sys.argv[2] if len(sys.argv) > 2 else "output"  # Default for backward compat
+    config_path = sys.argv[3] if len(sys.argv) > 3 else "config.json"  # Config file path
+
     start_time = time.time()
 
-    print(f"Agent {sport}: Starting poetry generation")
+    # Load config
+    try:
+        with open(config_path, "r") as f:
+            config = json.load(f)
+    except Exception as e:
+        print(f"Error: Could not load config: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Get generation settings
+    generation_mode = config.get("generation_mode", "template")
+    llm_provider = config.get("llm_provider", "together")
+    llm_model = config.get("llm_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free")
+
+    # Get appropriate API token based on provider
+    if llm_provider == "together":
+        api_token = os.environ.get("TOGETHER_API_KEY")
+    else:
+        api_token = os.environ.get("HUGGINGFACE_API_TOKEN")
+
+    print(f"Agent {sport}: Starting poetry generation (mode: {generation_mode}, provider: {llm_provider})")
 
     # Create output directory within session
     output_dir = Path(session_dir) / sport
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate haiku
-    haiku_lines = generate_haiku(sport)
+    try:
+        haiku_lines = generate_haiku(sport, generation_mode, llm_model, api_token, llm_provider)
+    except Exception as e:
+        print(f"Error generating haiku: {e}", file=sys.stderr)
+        sys.exit(1)
+
     haiku_text = "\n".join(haiku_lines)
 
     # Write haiku
@@ -179,7 +359,12 @@ def main():
     print(f"Agent {sport}: Wrote haiku ({len(haiku_lines)} lines)")
 
     # Generate sonnet
-    sonnet_lines = generate_sonnet(sport)
+    try:
+        sonnet_lines = generate_sonnet(sport, generation_mode, llm_model, api_token, llm_provider)
+    except Exception as e:
+        print(f"Error generating sonnet: {e}", file=sys.stderr)
+        sys.exit(1)
+
     sonnet_text = "\n".join(sonnet_lines)
 
     # Write sonnet
@@ -193,6 +378,8 @@ def main():
     end_time = time.time()
     metadata = {
         "sport": sport,
+        "generation_mode": generation_mode,
+        "llm_model": llm_model if generation_mode == "llm" else None,
         "timestamp_start": datetime.utcnow().isoformat() + "Z",
         "timestamp_end": datetime.utcnow().isoformat() + "Z",
         "duration_s": round(end_time - start_time, 2),
