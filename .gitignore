@@ -24,9 +24,12 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Note: For demo purposes, we include example output/logs
-# In production usage, you may want to ignore:
-# output/
-# execution_log.jsonl
-# usage_log.jsonl
+# Output and logs (generated at runtime)
+output/
+*.jsonl
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Config may contain session-specific data
 # config.json
