@@ -224,42 +224,58 @@ class TestOrchestratorIntegration:
     @pytest.mark.integration
     def test_logging_creates_files(self, tmp_path):
         """Test that execution logs are created in session directory."""
-        config = {
-            "sports": ["basketball"],
-            "timestamp": "2025-11-01T18:00:00Z",
-            "session_id": "test_logging",
-            "retry_enabled": False,
-            "generation_mode": "template"
-        }
+        repo_root = Path(__file__).parent.parent
+        config_path = repo_root / "config.json"
+        backup_path = repo_root / "config.json.pytest_backup"
 
-        config_file = tmp_path / "config.json"
-        with open(config_file, "w") as f:
-            json.dump(config, f)
+        # Backup existing config if it exists
+        if config_path.exists():
+            config_path.rename(backup_path)
 
-        # Run orchestrator
-        result = subprocess.run(
-            [sys.executable, "orchestrator.py"],
-            cwd=Path(__file__).parent.parent,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+        try:
+            # Create test config
+            config = {
+                "sports": ["basketball"],
+                "timestamp": "2025-11-01T18:00:00Z",
+                "session_id": "test_logging",
+                "retry_enabled": False,
+                "generation_mode": "template"
+            }
 
-        assert result.returncode == 0
+            with open(config_path, "w") as f:
+                json.dump(config, f)
 
-        # Check logs were written to session directory
-        session_dir = Path(__file__).parent.parent / "output" / "test_logging"
-        log_file = session_dir / "execution_log.jsonl"
-        assert log_file.exists(), f"Execution log not found at {log_file}"
+            # Run orchestrator
+            result = subprocess.run(
+                [sys.executable, "orchestrator.py"],
+                cwd=repo_root,
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
 
-        # Verify log has entries
-        with open(log_file) as f:
-            entries = f.readlines()
-        assert len(entries) > 0, "No log entries written"
+            assert result.returncode == 0
 
-        # Check usage log in session directory
-        usage_log = session_dir / "usage_log.jsonl"
-        assert usage_log.exists(), f"Usage log not found at {usage_log}"
+            # Check logs were written to session directory
+            session_dir = repo_root / "output" / "test_logging"
+            log_file = session_dir / "execution_log.jsonl"
+            assert log_file.exists(), f"Execution log not found at {log_file}"
+
+            # Verify log has entries
+            with open(log_file) as f:
+                entries = f.readlines()
+            assert len(entries) > 0, "No log entries written"
+
+            # Check usage log in session directory
+            usage_log = session_dir / "usage_log.jsonl"
+            assert usage_log.exists(), f"Usage log not found at {usage_log}"
+
+        finally:
+            # Restore original config
+            if config_path.exists():
+                config_path.unlink()
+            if backup_path.exists():
+                backup_path.rename(config_path)
 
 
 class TestErrorHandling:
