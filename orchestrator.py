@@ -61,6 +61,7 @@ class SportsPoetryOrchestrator:
         self.session_start = time.time()
         self.agent_results = []
         self.errors = []
+        self.session_dir = None  # Will be set after reading config
 
     def read_config(self) -> Dict[str, Any]:
         """Read and validate configuration file."""
@@ -95,6 +96,40 @@ class SportsPoetryOrchestrator:
             )
             raise
 
+    def create_session_directory(self, config: Dict[str, Any]) -> Path:
+        """Create session-specific output directory."""
+        session_id = config.get("session_id", "unknown")
+
+        # Create session directory
+        output_base = Path("output")
+        session_dir = output_base / session_id
+
+        # Check if session already exists
+        if session_dir.exists():
+            self.logger.log_event(
+                "orchestrator",
+                "warning",
+                details={"session_id": session_id},
+                message=f"Session directory already exists: {session_dir}"
+            )
+
+        session_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create/update symlink to latest
+        latest_link = output_base / "latest"
+        if latest_link.exists() or latest_link.is_symlink():
+            latest_link.unlink()
+        latest_link.symlink_to(session_id)
+
+        self.logger.log_event(
+            "orchestrator",
+            "session_dir_created",
+            details={"session_id": session_id, "path": str(session_dir)},
+            message=f"Created session directory: {session_dir}"
+        )
+
+        return session_dir
+
     def launch_poetry_agent(self, sport: str, attempt: int = 1) -> Dict[str, Any]:
         """Launch a single poetry generation agent for a sport."""
         agent_name = f"agent_{sport}"
@@ -110,7 +145,7 @@ class SportsPoetryOrchestrator:
         try:
             # Launch the poetry agent as a subprocess
             result = subprocess.run(
-                [sys.executable, "poetry_agent.py", sport],
+                [sys.executable, "poetry_agent.py", sport, str(self.session_dir)],
                 capture_output=True,
                 text=True,
                 timeout=120  # 2 minute timeout
@@ -120,7 +155,7 @@ class SportsPoetryOrchestrator:
 
             if result.returncode == 0:
                 # Parse agent output to get metadata
-                output_dir = Path(f"output/{sport}")
+                output_dir = self.session_dir / sport
                 metadata_file = output_dir / "metadata.json"
 
                 metadata = {}
@@ -280,7 +315,7 @@ class SportsPoetryOrchestrator:
 
         try:
             result = subprocess.run(
-                [sys.executable, "analyzer_agent.py"],
+                [sys.executable, "analyzer_agent.py", str(self.session_dir)],
                 capture_output=True,
                 text=True,
                 timeout=120
@@ -385,6 +420,9 @@ class SportsPoetryOrchestrator:
 
             if not sports:
                 raise ValueError("No sports found in config")
+
+            # Phase 1.5: Create session directory
+            self.session_dir = self.create_session_directory(config)
 
             # Phase 2: Launch all poetry agents in parallel
             agent_results = self.launch_all_agents(sports)

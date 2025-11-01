@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 
-def read_poem_files() -> List[Dict[str, Any]]:
-    """Read all poetry files from output directories."""
-    output_dir = Path("output")
+def read_poem_files(session_dir: str = "output") -> List[Dict[str, Any]]:
+    """Read all poetry files from session output directory."""
+    output_dir = Path(session_dir)
     poems = []
 
     if not output_dir.exists():
@@ -197,17 +197,21 @@ def generate_analysis_report(poems: List[Dict[str, Any]]) -> str:
 
 
 def main():
+    import sys
+
+    session_dir = sys.argv[1] if len(sys.argv) > 1 else "output"  # Default for backward compat
+
     print("Analyzer: Starting analysis")
 
-    # Read all poems
-    poems = read_poem_files()
+    # Read all poems from session directory
+    poems = read_poem_files(session_dir)
     print(f"Analyzer: Found {len(poems)} sports to analyze")
 
     # Generate report
     report = generate_analysis_report(poems)
 
-    # Write report
-    output_file = Path("output/analysis_report.md")
+    # Write report to session directory
+    output_file = Path(session_dir) / "analysis_report.md"
     with open(output_file, "w") as f:
         f.write(report)
 

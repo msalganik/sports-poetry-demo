@@ -158,12 +158,13 @@ def main():
         sys.exit(1)
 
     sport = sys.argv[1]
+    session_dir = sys.argv[2] if len(sys.argv) > 2 else "output"  # Default for backward compat
     start_time = time.time()
 
     print(f"Agent {sport}: Starting poetry generation")
 
-    # Create output directory
-    output_dir = Path(f"output/{sport}")
+    # Create output directory within session
+    output_dir = Path(session_dir) / sport
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate haiku
