@@ -299,25 +299,44 @@ Proceed with this configuration? [yes/no/edit]
 from config_builder import ConfigBuilder, ConfigValidationError
 
 try:
-    builder = ConfigBuilder()
+    # Always start from default config
+    builder = ConfigBuilder.load_default()
+
+    # Apply user-specified changes
     builder.with_sports(sports_list)
-    builder.with_generation_mode(mode)
+
+    if mode != "template":  # Only change if different from default
+        builder.with_generation_mode(mode)
 
     if mode == "llm":
-        builder.with_llm_provider(provider)
-        builder.with_llm_model(model)
+        if provider != "together":  # Only change if different from default
+            builder.with_llm_provider(provider)
+        if model != "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free":  # Only change if different
+            builder.with_llm_model(model)
 
-    builder.with_retry(retry_enabled)
+    if not retry_enabled:  # Only change if different from default (true)
+        builder.with_retry(retry_enabled)
 
-    # Auto-generate session_id and timestamp
-    config_path = builder.save("config.json")
+    # Save with changelog tracking
+    # Provide a clear reason explaining what the user changed
+    reason = f"User specified sports: {', '.join(sports_list)}"
+    if mode == "llm":
+        reason += " with LLM mode enabled"
 
+    config_path = builder.save("config.json", reason=reason, user="claude_code")
+
+    # Show changelog location
+    session_id = builder.config['session_id']
     print(f"✓ Successfully created {config_path}")
-    print(f"✓ Session ID: {builder.config['session_id']}")
+    print(f"✓ Session ID: {session_id}")
+    print(f"✓ Changelog: output/{session_id}/config.changelog.json")
     print(f"\nNext step: Run the orchestrator")
     print(f"  cd sports_poetry_demo")
     print(f"  python3 orchestrator.py")
 
+except FileNotFoundError as e:
+    print(f"❌ Error: {e}")
+    print(f"The config.default.json file is missing from the repository.")
 except ConfigValidationError as e:
     print(f"❌ Configuration error: {e}")
     print(f"Please try again or check your inputs.")
@@ -333,17 +352,22 @@ except Exception as e:
 ```
 User: "Create a config for basketball, soccer, and tennis"
 
-Skill: Great! I'll create a configuration with:
-       • Sports: basketball, soccer, tennis
+Skill: Great! I'll create a configuration starting from defaults:
+
+       Default settings:
+       • Sports: basketball, soccer, tennis (will use default)
        • Mode: template (default)
        • Retry: enabled (default)
 
-       Use these defaults? [yes/no]
+       You're using the default sports. Keep all defaults? [yes/no]
 
 User: "yes"
 
 Skill: ✓ Created config.json
-       Session ID: session_20251101_184500
+       ✓ Session ID: session_20251101_184500
+       ✓ Changelog: output/session_20251101_184500/config.changelog.json
+
+       No changes from default configuration.
 
        Next step: python3 orchestrator.py
 ```

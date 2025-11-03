@@ -9,7 +9,6 @@ import json
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
-import uuid
 
 
 class ConfigValidationError(Exception):
@@ -232,12 +231,14 @@ class ConfigBuilder:
 
         return self.validate()
 
-    def save(self, path: str = "config.json") -> Path:
+    def save(self, path: str = "config.json", reason: Optional[str] = None, user: str = "unknown") -> Path:
         """
-        Build, validate, and save the configuration to a file.
+        Build, validate, and save the configuration to a file with changelog.
 
         Args:
             path: Path to save the config file
+            reason: Explanation of what changed and why (default: "Configuration saved")
+            user: Who made the change (e.g., "claude_code", "cli", "api")
 
         Returns:
             Path object of the saved file
@@ -245,13 +246,7 @@ class ConfigBuilder:
         Raises:
             ConfigValidationError: If validation fails
         """
-        config = self.build()
-
-        config_path = Path(path)
-        with open(config_path, "w") as f:
-            json.dump(config, f, indent=2)
-
-        return config_path
+        return self.save_with_changelog(config_path=path, reason=reason, user=user)
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'ConfigBuilder':
@@ -284,6 +279,127 @@ class ConfigBuilder:
 
         return ConfigBuilder.from_dict(data)
 
+    @staticmethod
+    def load_default(path: str = "config.default.json") -> 'ConfigBuilder':
+        """
+        Load the default configuration template.
+
+        Args:
+            path: Path to the default config file
+
+        Returns:
+            New ConfigBuilder instance with the default config
+
+        Raises:
+            FileNotFoundError: If config.default.json doesn't exist
+            ConfigValidationError: If default config is invalid
+        """
+        if not Path(path).exists():
+            raise FileNotFoundError(
+                f"Default config not found: {path}\n"
+                f"Repository may be corrupted. This file must exist."
+            )
+        return ConfigBuilder.load(path)
+
+    def save_with_changelog(self,
+                           config_path: str = "config.json",
+                           reason: Optional[str] = None,
+                           user: str = "unknown") -> Path:
+        """
+        Save config and write changelog to session directory.
+
+        Args:
+            config_path: Where to save config (default: config.json)
+            reason: Explanation of what changed and why (default: "Configuration saved")
+            user: Who made the change (e.g., "claude_code", "cli", "api")
+
+        Returns:
+            Path to saved config file
+
+        Side effects:
+            - Writes config to config_path
+            - Creates output/{session_id}/ directory
+            - Writes output/{session_id}/config.changelog.json
+
+        Raises:
+            ConfigValidationError: If validation fails
+        """
+        if reason is None:
+            reason = "Configuration saved"
+
+        # Build and validate new config
+        new_config = self.build()
+
+        # Load default config (always compare against this baseline)
+        default_builder = ConfigBuilder.load_default()
+        default_config = default_builder.config
+
+        # Compute diff vs default (exclude auto-generated fields)
+        changed_from_default, changes = compute_changes_from_default(
+            default_config, new_config
+        )
+
+        # Save new config
+        config_file_path = Path(config_path)
+        with open(config_file_path, "w") as f:
+            json.dump(new_config, f, indent=2)
+
+        # Write changelog to session directory
+        session_id = new_config["session_id"]
+        session_dir = Path(f"output/{session_id}")
+        session_dir.mkdir(parents=True, exist_ok=True)
+
+        changelog = {
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "session_id": session_id,
+            "user": user,
+            "reason": reason,
+            "changed_from_default": changed_from_default,
+            "changes": changes
+        }
+
+        changelog_path = session_dir / "config.changelog.json"
+        with open(changelog_path, "w") as f:
+            json.dump(changelog, f, indent=2)
+
+        return config_file_path
+
+
+def compute_changes_from_default(default_config: Dict[str, Any],
+                                 new_config: Dict[str, Any]) -> tuple:
+    """
+    Compare new config against default template.
+
+    Args:
+        default_config: The default configuration
+        new_config: The new configuration to compare
+
+    Returns:
+        tuple: (changed_field_names, detailed_changes_dict)
+            - changed_field_names: List of field names that changed
+            - detailed_changes_dict: Dict mapping field names to {old, new} values
+    """
+    EXCLUDE_FIELDS = {"session_id", "timestamp"}
+
+    changed_fields = []
+    changes = {}
+
+    for key in new_config:
+        if key in EXCLUDE_FIELDS:
+            continue
+
+        default_value = default_config.get(key)
+        new_value = new_config[key]
+
+        if default_value != new_value:
+            changed_fields.append(key)
+            changes[key] = {
+                "old": default_value,
+                "new": new_value
+            }
+
+    return changed_fields, changes
+
 
 def create_config_interactive() -> ConfigBuilder:
     """
@@ -307,9 +423,13 @@ def create_config_interactive() -> ConfigBuilder:
     mode_choice = input("> ").strip()
     mode = "llm" if mode_choice == "2" else "template"
 
-    # Build config
-    builder = ConfigBuilder()
-    builder.with_sports(sports).with_generation_mode(mode)
+    # Build config starting from defaults
+    builder = ConfigBuilder.load_default()
+    builder.with_sports(sports)
+
+    # Only set generation_mode if different from default (template)
+    if mode != "template":
+        builder.with_generation_mode(mode)
 
     if mode == "llm":
         print("\nLLM Provider:")
@@ -317,7 +437,9 @@ def create_config_interactive() -> ConfigBuilder:
         print("  2. huggingface")
         provider_choice = input("> ").strip()
         provider = "huggingface" if provider_choice == "2" else "together"
-        builder.with_llm_provider(provider)
+        # Only set if different from default (together)
+        if provider != "together":
+            builder.with_llm_provider(provider)
 
     return builder
 

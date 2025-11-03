@@ -3,7 +3,7 @@
 import pytest
 import json
 from pathlib import Path
-from config_builder import ConfigBuilder, ConfigValidationError
+from config_builder import ConfigBuilder, ConfigValidationError, compute_changes_from_default
 
 
 class TestConfigBuilder:
@@ -232,12 +232,27 @@ class TestConfigBuilder:
         assert config["session_id"] == "custom_session"
         assert config["timestamp"] == "2025-01-01T12:00:00Z"
 
-    def test_save_creates_file(self, tmp_path):
+    def test_save_creates_file(self, tmp_path, monkeypatch):
         """Test that save creates a config file."""
+        monkeypatch.chdir(tmp_path)
+        # Create default config
+        default_config = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": None,
+            "timestamp": None,
+            "retry_enabled": True,
+            "generation_mode": "template",
+            "llm_provider": "together",
+            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
+        default_path = tmp_path / "config.default.json"
+        with open(default_path, "w") as f:
+            json.dump(default_config, f)
+
         config_path = tmp_path / "test_config.json"
         builder = ConfigBuilder()
         builder.with_sports(["basketball", "soccer", "tennis"])
-        path = builder.save(str(config_path))
+        path = builder.save(str(config_path), reason="Test save creates file", user="test")
 
         assert path.exists()
         with open(path, "r") as f:
@@ -247,9 +262,23 @@ class TestConfigBuilder:
     def test_save_default_path(self, tmp_path, monkeypatch):
         """Test that save uses default path."""
         monkeypatch.chdir(tmp_path)
+        # Create default config
+        default_config = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": None,
+            "timestamp": None,
+            "retry_enabled": True,
+            "generation_mode": "template",
+            "llm_provider": "together",
+            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
+        default_path = tmp_path / "config.default.json"
+        with open(default_path, "w") as f:
+            json.dump(default_config, f)
+
         builder = ConfigBuilder()
         builder.with_sports(["basketball", "soccer", "tennis"])
-        path = builder.save()
+        path = builder.save(reason="Test default path", user="test")
 
         assert path.name == "config.json"
         assert path.exists()
@@ -289,17 +318,389 @@ class TestConfigBuilder:
         assert builder.config["sports"] == ["hockey", "volleyball", "swimming"]
         assert builder.config["session_id"] == "loaded_session"
 
+    def test_load_default_exists(self, tmp_path, monkeypatch):
+        """Test loading default config successfully."""
+        monkeypatch.chdir(tmp_path)
+        # Create a default config
+        default_config = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": None,
+            "timestamp": None,
+            "retry_enabled": True,
+            "generation_mode": "template",
+            "llm_provider": "together",
+            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
+        default_path = tmp_path / "config.default.json"
+        with open(default_path, "w") as f:
+            json.dump(default_config, f)
+
+        builder = ConfigBuilder.load_default(str(default_path))
+        assert builder.config["sports"] == ["basketball", "soccer", "tennis"]
+        assert builder.config["generation_mode"] == "template"
+
+    def test_load_default_missing(self, tmp_path):
+        """Test that load_default fails with clear error if default missing."""
+        missing_path = tmp_path / "nonexistent.json"
+        with pytest.raises(FileNotFoundError, match="Default config not found"):
+            ConfigBuilder.load_default(str(missing_path))
+
+    def test_save_with_changelog_all_defaults(self, tmp_path, monkeypatch):
+        """Test changelog when using all defaults."""
+        monkeypatch.chdir(tmp_path)
+        # Create default config
+        default_config = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": None,
+            "timestamp": None,
+            "retry_enabled": True,
+            "generation_mode": "template",
+            "llm_provider": "together",
+            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
+        default_path = tmp_path / "config.default.json"
+        with open(default_path, "w") as f:
+            json.dump(default_config, f)
+
+        # Create config using all defaults
+        builder = ConfigBuilder.load_default(str(default_path))
+        config_path = tmp_path / "config.json"
+        builder.save_with_changelog(
+            str(config_path),
+            reason="Initial configuration using all defaults",
+            user="test"
+        )
+
+        # Check that changelog was created
+        session_id = builder.config["session_id"]
+        changelog_path = tmp_path / "output" / session_id / "config.changelog.json"
+        assert changelog_path.exists()
+
+        with open(changelog_path) as f:
+            changelog = json.load(f)
+
+        assert changelog["changed_from_default"] == []
+        assert changelog["changes"] == {}
+        assert changelog["reason"] == "Initial configuration using all defaults"
+        assert changelog["user"] == "test"
+
+    def test_save_with_changelog_sports_changed(self, tmp_path, monkeypatch):
+        """Test changelog when sports are changed."""
+        monkeypatch.chdir(tmp_path)
+        # Create default config
+        default_config = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": None,
+            "timestamp": None,
+            "retry_enabled": True,
+            "generation_mode": "template",
+            "llm_provider": "together",
+            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
+        default_path = tmp_path / "config.default.json"
+        with open(default_path, "w") as f:
+            json.dump(default_config, f)
+
+        # Create config with different sports
+        builder = ConfigBuilder.load_default(str(default_path))
+        builder.with_sports(["hockey", "swimming", "volleyball"])
+        config_path = tmp_path / "config.json"
+        builder.save_with_changelog(
+            str(config_path),
+            reason="User changed sports selection",
+            user="test"
+        )
+
+        # Check changelog
+        session_id = builder.config["session_id"]
+        changelog_path = tmp_path / "output" / session_id / "config.changelog.json"
+
+        with open(changelog_path) as f:
+            changelog = json.load(f)
+
+        assert changelog["changed_from_default"] == ["sports"]
+        assert changelog["changes"]["sports"]["old"] == ["basketball", "soccer", "tennis"]
+        assert changelog["changes"]["sports"]["new"] == ["hockey", "swimming", "volleyball"]
+
+    def test_save_with_changelog_multiple_changes(self, tmp_path, monkeypatch):
+        """Test changelog when multiple fields change."""
+        monkeypatch.chdir(tmp_path)
+        # Create default config
+        default_config = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": None,
+            "timestamp": None,
+            "retry_enabled": True,
+            "generation_mode": "template",
+            "llm_provider": "together",
+            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
+        default_path = tmp_path / "config.default.json"
+        with open(default_path, "w") as f:
+            json.dump(default_config, f)
+
+        # Create config with multiple changes
+        builder = ConfigBuilder.load_default(str(default_path))
+        builder.with_sports(["hockey", "swimming", "volleyball"])
+        builder.with_generation_mode("llm")
+        builder.with_llm_model("different-model")
+        config_path = tmp_path / "config.json"
+        builder.save_with_changelog(
+            str(config_path),
+            reason="User changed sports and enabled LLM mode",
+            user="claude_code"
+        )
+
+        # Check changelog
+        session_id = builder.config["session_id"]
+        changelog_path = tmp_path / "output" / session_id / "config.changelog.json"
+
+        with open(changelog_path) as f:
+            changelog = json.load(f)
+
+        assert "sports" in changelog["changed_from_default"]
+        assert "generation_mode" in changelog["changed_from_default"]
+        assert "llm_model" in changelog["changed_from_default"]
+        assert len(changelog["changed_from_default"]) == 3
+
+    def test_save_with_changelog_no_reason(self, tmp_path, monkeypatch):
+        """Test that save_with_changelog provides default reason when None."""
+        monkeypatch.chdir(tmp_path)
+        # Create default config
+        default_config = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": None,
+            "timestamp": None,
+            "retry_enabled": True,
+            "generation_mode": "template",
+            "llm_provider": "together",
+            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
+        default_path = tmp_path / "config.default.json"
+        with open(default_path, "w") as f:
+            json.dump(default_config, f)
+
+        builder = ConfigBuilder.load_default(str(default_path))
+        config_path = tmp_path / "config.json"
+
+        # Should not raise error, should use default reason
+        builder.save_with_changelog(str(config_path), reason=None, user="test")
+
+        # Verify changelog was created with default reason
+        session_id = builder.config["session_id"]
+        changelog_path = tmp_path / "output" / session_id / "config.changelog.json"
+
+        with open(changelog_path) as f:
+            changelog = json.load(f)
+
+        assert changelog["reason"] == "Configuration saved"
+
+    def test_changelog_excludes_auto_fields(self, tmp_path, monkeypatch):
+        """Test that session_id and timestamp are not tracked in changes."""
+        monkeypatch.chdir(tmp_path)
+        # Create default config
+        default_config = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": None,
+            "timestamp": None,
+            "retry_enabled": True,
+            "generation_mode": "template",
+            "llm_provider": "together",
+            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
+        default_path = tmp_path / "config.default.json"
+        with open(default_path, "w") as f:
+            json.dump(default_config, f)
+
+        builder = ConfigBuilder.load_default(str(default_path))
+        config_path = tmp_path / "config.json"
+        builder.save_with_changelog(
+            str(config_path),
+            reason="Test auto-field exclusion",
+            user="test"
+        )
+
+        # Check changelog
+        session_id = builder.config["session_id"]
+        changelog_path = tmp_path / "output" / session_id / "config.changelog.json"
+
+        with open(changelog_path) as f:
+            changelog = json.load(f)
+
+        assert "session_id" not in changelog["changed_from_default"]
+        assert "timestamp" not in changelog["changed_from_default"]
+        assert "session_id" not in changelog["changes"]
+        assert "timestamp" not in changelog["changes"]
+
+    def test_changelog_location(self, tmp_path, monkeypatch):
+        """Test that changelog is written to output/{session_id}/."""
+        monkeypatch.chdir(tmp_path)
+        # Create default config
+        default_config = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": None,
+            "timestamp": None,
+            "retry_enabled": True,
+            "generation_mode": "template",
+            "llm_provider": "together",
+            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
+        default_path = tmp_path / "config.default.json"
+        with open(default_path, "w") as f:
+            json.dump(default_config, f)
+
+        builder = ConfigBuilder.load_default(str(default_path))
+        config_path = tmp_path / "config.json"
+        builder.save_with_changelog(
+            str(config_path),
+            reason="Test changelog location",
+            user="test"
+        )
+
+        session_id = builder.config["session_id"]
+        expected_path = tmp_path / "output" / session_id / "config.changelog.json"
+        assert expected_path.exists()
+
+    def test_changelog_required_fields(self, tmp_path, monkeypatch):
+        """Test that changelog contains all required fields."""
+        monkeypatch.chdir(tmp_path)
+        # Create default config
+        default_config = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": None,
+            "timestamp": None,
+            "retry_enabled": True,
+            "generation_mode": "template",
+            "llm_provider": "together",
+            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
+        default_path = tmp_path / "config.default.json"
+        with open(default_path, "w") as f:
+            json.dump(default_config, f)
+
+        builder = ConfigBuilder.load_default(str(default_path))
+        config_path = tmp_path / "config.json"
+        builder.save_with_changelog(
+            str(config_path),
+            reason="Test required fields",
+            user="test"
+        )
+
+        session_id = builder.config["session_id"]
+        changelog_path = tmp_path / "output" / session_id / "config.changelog.json"
+
+        with open(changelog_path) as f:
+            changelog = json.load(f)
+
+        # Verify all required fields are present
+        assert "timestamp" in changelog
+        assert "session_id" in changelog
+        assert "user" in changelog
+        assert "reason" in changelog
+        assert "changed_from_default" in changelog
+        assert "changes" in changelog
+
+
+class TestComputeChangesFromDefault:
+    """Tests for compute_changes_from_default helper function."""
+
+    def test_no_changes(self):
+        """Test when config matches default exactly."""
+        default = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": "test",
+            "timestamp": "2025-01-01T12:00:00Z",
+            "generation_mode": "template"
+        }
+        new = default.copy()
+
+        changed, changes = compute_changes_from_default(default, new)
+
+        # session_id and timestamp are excluded, so no changes
+        assert changed == []
+        assert changes == {}
+
+    def test_single_change(self):
+        """Test when one field changes."""
+        default = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": "test",
+            "timestamp": "2025-01-01T12:00:00Z",
+            "generation_mode": "template"
+        }
+        new = default.copy()
+        new["generation_mode"] = "llm"
+
+        changed, changes = compute_changes_from_default(default, new)
+
+        assert changed == ["generation_mode"]
+        assert changes["generation_mode"]["old"] == "template"
+        assert changes["generation_mode"]["new"] == "llm"
+
+    def test_multiple_changes(self):
+        """Test when multiple fields change."""
+        default = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": "test",
+            "timestamp": "2025-01-01T12:00:00Z",
+            "generation_mode": "template",
+            "retry_enabled": True
+        }
+        new = default.copy()
+        new["sports"] = ["hockey", "swimming", "volleyball"]
+        new["generation_mode"] = "llm"
+
+        changed, changes = compute_changes_from_default(default, new)
+
+        assert "sports" in changed
+        assert "generation_mode" in changed
+        assert len(changed) == 2
+
+    def test_excludes_session_id_and_timestamp(self):
+        """Test that session_id and timestamp changes are excluded."""
+        default = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": "session1",
+            "timestamp": "2025-01-01T12:00:00Z",
+            "generation_mode": "template"
+        }
+        new = default.copy()
+        new["session_id"] = "session2"
+        new["timestamp"] = "2025-01-02T12:00:00Z"
+
+        changed, changes = compute_changes_from_default(default, new)
+
+        assert "session_id" not in changed
+        assert "timestamp" not in changed
+        assert changed == []
+        assert changes == {}
+
 
 class TestConfigBuilderIntegration:
     """Integration tests for typical usage patterns."""
 
-    def test_template_mode_workflow(self, tmp_path):
+    def test_template_mode_workflow(self, tmp_path, monkeypatch):
         """Test complete workflow for template mode config."""
+        monkeypatch.chdir(tmp_path)
+        # Create default config
+        default_config = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": None,
+            "timestamp": None,
+            "retry_enabled": True,
+            "generation_mode": "template",
+            "llm_provider": "together",
+            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
+        default_path = tmp_path / "config.default.json"
+        with open(default_path, "w") as f:
+            json.dump(default_config, f)
+
         config_path = tmp_path / "config.json"
-        builder = ConfigBuilder()
-        builder.with_sports(["basketball", "soccer", "tennis"])
-        builder.with_generation_mode("template")
-        path = builder.save(str(config_path))
+        # Use load_default() pattern (matches documentation)
+        builder = ConfigBuilder.load_default(str(default_path))
+        # Using default sports, so no changes needed
+        path = builder.save(str(config_path), reason="Test template mode workflow", user="test")
 
         # Verify file contents
         with open(path, "r") as f:
@@ -310,15 +711,30 @@ class TestConfigBuilderIntegration:
         assert config["session_id"].startswith("session_")
         assert "Z" in config["timestamp"]
 
-    def test_llm_mode_workflow(self, tmp_path):
+    def test_llm_mode_workflow(self, tmp_path, monkeypatch):
         """Test complete workflow for LLM mode config."""
+        monkeypatch.chdir(tmp_path)
+        # Create default config
+        default_config = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": None,
+            "timestamp": None,
+            "retry_enabled": True,
+            "generation_mode": "template",
+            "llm_provider": "together",
+            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
+        default_path = tmp_path / "config.default.json"
+        with open(default_path, "w") as f:
+            json.dump(default_config, f)
+
         config_path = tmp_path / "config.json"
-        builder = ConfigBuilder()
+        # Use load_default() pattern (matches documentation)
+        builder = ConfigBuilder.load_default(str(default_path))
         builder.with_sports(["hockey", "volleyball", "swimming", "baseball"])
         builder.with_generation_mode("llm")
-        builder.with_llm_provider("together")
-        builder.with_llm_model("meta-llama/Llama-3.3-70B-Instruct-Turbo-Free")
-        path = builder.save(str(config_path))
+        # llm_provider and llm_model already match defaults, no need to set
+        path = builder.save(str(config_path), reason="Test LLM mode workflow", user="test")
 
         # Verify file contents
         with open(path, "r") as f:
@@ -329,20 +745,35 @@ class TestConfigBuilderIntegration:
         assert config["llm_provider"] == "together"
         assert config["llm_model"] == "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
 
-    def test_modify_and_resave(self, tmp_path):
+    def test_modify_and_resave(self, tmp_path, monkeypatch):
         """Test loading, modifying, and resaving config."""
+        monkeypatch.chdir(tmp_path)
+        # Create default config
+        default_config = {
+            "sports": ["basketball", "soccer", "tennis"],
+            "session_id": None,
+            "timestamp": None,
+            "retry_enabled": True,
+            "generation_mode": "template",
+            "llm_provider": "together",
+            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
+        default_path = tmp_path / "config.default.json"
+        with open(default_path, "w") as f:
+            json.dump(default_config, f)
+
         config_path = tmp_path / "config.json"
 
-        # Create initial config
-        builder1 = ConfigBuilder()
-        builder1.with_sports(["basketball", "soccer", "tennis"])
-        builder1.save(str(config_path))
+        # Create initial config using load_default() pattern
+        builder1 = ConfigBuilder.load_default(str(default_path))
+        # Using default sports, no changes needed
+        builder1.save(str(config_path), reason="Initial config", user="test")
 
         # Load and modify
         builder2 = ConfigBuilder.load(str(config_path))
         builder2.with_generation_mode("llm")
         builder2.with_llm_provider("together")
-        builder2.save(str(config_path))
+        builder2.save(str(config_path), reason="Enable LLM mode", user="test")
 
         # Verify modifications
         with open(config_path, "r") as f:

@@ -76,7 +76,9 @@ sports_poetry_demo/
 ├── orchestrator.py          # Main workflow coordinator
 ├── poetry_agent.py          # Individual poetry generator
 ├── analyzer_agent.py        # Result synthesis
-├── config.json              # Runtime configuration (created by Claude)
+├── config_builder.py        # Configuration builder with validation
+├── config.default.json      # Default configuration template (in git)
+├── config.json              # Active runtime configuration (gitignored)
 ├── output/
 │   ├── {session_id}/       # Per-run isolated outputs
 │   │   ├── {sport}/
@@ -84,13 +86,15 @@ sports_poetry_demo/
 │   │   │   ├── sonnet.txt
 │   │   │   └── metadata.json
 │   │   ├── analysis_report.md
-│   │   ├── execution_log.jsonl    # Detailed provenance
-│   │   └── usage_log.jsonl        # Aggregate analytics
-│   └── latest -> {session_id}     # Symlink to most recent
+│   │   ├── execution_log.jsonl      # Detailed provenance
+│   │   ├── usage_log.jsonl          # Aggregate analytics
+│   │   └── config.changelog.json    # Config changes vs default
+│   └── latest -> {session_id}       # Symlink to most recent
 └── tests/
     ├── conftest.py          # Shared pytest fixtures
     ├── test_orchestrator.py
-    └── test_poetry_agent.py
+    ├── test_poetry_agent.py
+    └── test_config_builder.py
 ```
 
 ## Working with This Codebase
@@ -98,13 +102,28 @@ sports_poetry_demo/
 ### Creating config.json
 
 When users request to run the demo, Claude Code should:
-1. Ask for 3-5 sports (or use the provided list)
-2. Validate the count
-3. Create `sports_poetry_demo/config.json` with:
+1. Load the default configuration from `config.default.json`
+2. Ask for 3-5 sports (or use the provided list)
+3. Validate the count
+4. Create `sports_poetry_demo/config.json` with:
    - sports list
    - unique session_id (e.g., timestamp-based)
    - timestamp
    - default to template mode unless LLM requested
+5. Track changes in `output/{session_id}/config.changelog.json`
+
+**Usage pattern:**
+```python
+from config_builder import ConfigBuilder
+
+# Always start from default config
+builder = ConfigBuilder.load_default()
+builder.with_sports(["hockey", "swimming", "volleyball"])
+builder.save(
+    reason="User specified different sports",
+    user="claude_code"
+)
+```
 
 ### Enabling LLM Mode
 
@@ -125,6 +144,27 @@ cat output/latest/execution_log.jsonl | jq 'select(.action == "failed")'
 Usage log (aggregate stats):
 ```bash
 cat output/latest/usage_log.jsonl | jq .
+```
+
+Configuration changelog (track what changed from default):
+```bash
+# View changelog for latest session
+cat output/latest/config.changelog.json | jq .
+
+# Quick scan: What changed from default?
+cat output/latest/config.changelog.json | jq .changed_from_default
+
+# View all session changelogs
+find output -name "config.changelog.json" -exec cat {} \; | jq -s .
+
+# Find sessions where sports changed
+find output -name "config.changelog.json" -exec jq 'select(.changed_from_default | contains(["sports"]))' {} \;
+
+# Summary of all changes across sessions
+find output -name "config.changelog.json" -exec jq '{session: .session_id, changed: .changed_from_default, user: .user, reason: .reason}' {} \;
+
+# Machine audit: Get exact old/new values for specific changes
+find output -name "config.changelog.json" -exec jq 'select(.changes.sports) | {session: .session_id, sports: .changes.sports}' {} \;
 ```
 
 ### Retry Behavior
@@ -162,6 +202,66 @@ Tests are organized by component:
 ```bash
 pytest --cov=. --cov-report=html
 ```
+
+## Configuration Change Tracking
+
+### Changelog Format
+
+Location: `output/{session_id}/config.changelog.json`
+
+Each session gets a changelog file that tracks what changed from the default configuration:
+
+```json
+{
+  "timestamp": "2025-11-01T18:40:00Z",
+  "session_id": "session_20251101_184000",
+  "user": "claude_code",
+  "reason": "User changed sports and enabled LLM mode",
+  "changed_from_default": ["sports", "generation_mode"],
+  "changes": {
+    "sports": {
+      "old": ["basketball", "soccer", "tennis"],
+      "new": ["hockey", "swimming", "volleyball"]
+    },
+    "generation_mode": {
+      "old": "template",
+      "new": "llm"
+    }
+  }
+}
+```
+
+**Fields:**
+- `timestamp` - When changelog was created (ISO 8601)
+- `session_id` - Which session this is for
+- `user` - Who made the change (e.g., "claude_code", "cli", "api")
+- `reason` - Required explanation of what changed and why
+- `changed_from_default` - Array of field names (quick human scan)
+- `changes` - Full old/new values (machine-auditable)
+
+**Key design:**
+- Compares against `config.default.json` only (stable baseline)
+- "old" = value from default template
+- "new" = value in current config
+- Excludes auto-generated fields (session_id, timestamp)
+
+### Default Configuration
+
+The `config.default.json` file provides a stable baseline for all configs:
+
+```json
+{
+  "sports": ["basketball", "soccer", "tennis"],
+  "session_id": null,
+  "timestamp": null,
+  "retry_enabled": true,
+  "generation_mode": "template",
+  "llm_provider": "together",
+  "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+}
+```
+
+This file is checked into git and must exist for the system to work.
 
 ## Important Implementation Details
 
