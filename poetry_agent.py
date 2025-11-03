@@ -11,7 +11,7 @@ import sys
 import json
 import time
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # Simple template-based poem generation for demo purposes
@@ -327,8 +327,9 @@ def main():
 
     # Get generation settings
     generation_mode = config.get("generation_mode", "template")
-    llm_provider = config.get("llm_provider", "together")
-    llm_model = config.get("llm_model", "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free")
+    llm_config = config.get("llm", {})
+    llm_provider = llm_config.get("provider", "together")
+    llm_model = llm_config.get("model", "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free")
 
     # Get appropriate API token based on provider
     if llm_provider == "together":
@@ -380,8 +381,8 @@ def main():
         "sport": sport,
         "generation_mode": generation_mode,
         "llm_model": llm_model if generation_mode == "llm" else None,
-        "timestamp_start": datetime.utcnow().isoformat() + "Z",
-        "timestamp_end": datetime.utcnow().isoformat() + "Z",
+        "timestamp_start": datetime.now(timezone.utc).isoformat(),
+        "timestamp_end": datetime.now(timezone.utc).isoformat(),
         "duration_s": round(end_time - start_time, 2),
         "haiku_lines": len(haiku_lines),
         "haiku_words": count_words(haiku_lines),

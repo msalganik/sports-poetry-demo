@@ -48,12 +48,8 @@ def sample_config():
     """Provide a sample config dict for testing."""
     return {
         "sports": ["basketball", "soccer", "tennis"],
-        "timestamp": "2025-11-01T18:00:00Z",
-        "session_id": "test_session",
         "retry_enabled": True,
-        "generation_mode": "template",
-        "llm_provider": "together",
-        "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        "generation_mode": "template"
     }
 
 
@@ -88,7 +84,7 @@ def create_test_config(
 
     Args:
         sports: List of sports to generate poems for
-        session_id: Session identifier
+        session_id: Session identifier (added at runtime by orchestrator)
         mode: "template" or "llm"
         api_key: API key for LLM mode (optional)
 
@@ -97,13 +93,17 @@ def create_test_config(
     """
     config = {
         "sports": sports,
-        "timestamp": "2025-11-01T18:00:00Z",
-        "session_id": session_id,
+        "session_id": session_id,  # Added by orchestrator at runtime
         "retry_enabled": True,
-        "generation_mode": mode,
-        "llm_provider": "together",
-        "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        "generation_mode": mode
     }
+
+    # Add LLM config if in LLM mode
+    if mode == "llm":
+        config["llm"] = {
+            "provider": "together",
+            "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+        }
 
     # Set API key in environment if provided
     if api_key:

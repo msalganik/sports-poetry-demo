@@ -54,16 +54,32 @@ pip install -r requirements-dev.txt  # Install testing dependencies
 
 ### Configuration System
 
-The `config.json` structure:
+The `config.json` structure (template mode):
 ```json
 {
   "sports": ["basketball", "soccer", "tennis"],
-  "session_id": "unique_id",
-  "generation_mode": "template" | "llm",
-  "llm_provider": "together" | "huggingface",
-  "llm_model": "model-name"
+  "retry_enabled": true,
+  "generation_mode": "template"
 }
 ```
+
+The `config.json` structure (LLM mode):
+```json
+{
+  "sports": ["basketball", "soccer", "tennis"],
+  "retry_enabled": true,
+  "generation_mode": "llm",
+  "llm": {
+    "provider": "together",
+    "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+  }
+}
+```
+
+**Important Notes**:
+- `session_id` is **generated at runtime** by the orchestrator, not stored in config
+- LLM settings are **only included when using LLM mode**
+- The `llm` object is auto-populated with defaults when switching to LLM mode
 
 **Generation Modes**:
 - `template` (default): Fast, deterministic, uses pre-written templates
@@ -107,22 +123,27 @@ When users request to run the demo, Claude Code should:
 3. Validate the count
 4. Create `sports_poetry_demo/config.json` with:
    - sports list
-   - unique session_id (e.g., timestamp-based)
-   - timestamp
-   - default to template mode unless LLM requested
-5. Track changes in `output/{session_id}/config.changelog.json`
+   - retry_enabled setting
+   - generation_mode (template or llm)
+   - llm config (only if generation_mode is "llm")
+5. The orchestrator will:
+   - Generate unique session_id at runtime (format: `session_YYYYMMDD_HHMMSS_xxxxxx`)
+   - Create changelog in `output/{session_id}/config.changelog.json`
 
 **Usage pattern:**
 ```python
 from config_builder import ConfigBuilder
 
-# Always start from default config
+# Template mode (minimal config)
 builder = ConfigBuilder.load_default()
 builder.with_sports(["hockey", "swimming", "volleyball"])
-builder.save(
-    reason="User specified different sports",
-    user="claude_code"
-)
+builder.save()  # Saves to config.json
+
+# LLM mode (auto-populates LLM defaults)
+builder = ConfigBuilder.load_default()
+builder.with_sports(["hockey", "swimming", "volleyball"])
+builder.with_generation_mode("llm")  # Auto-adds llm config
+builder.save()
 ```
 
 ### Enabling LLM Mode
@@ -213,11 +234,11 @@ Each session gets a changelog file that tracks what changed from the default con
 
 ```json
 {
-  "timestamp": "2025-11-01T18:40:00Z",
-  "session_id": "session_20251101_184000",
-  "user": "claude_code",
-  "reason": "User changed sports and enabled LLM mode",
-  "changed_from_default": ["sports", "generation_mode"],
+  "timestamp": "2025-11-03T18:40:00.123456+00:00",
+  "session_id": "session_20251103_184000_a3f9c2",
+  "user": "orchestrator",
+  "reason": "Workflow execution",
+  "changed_from_default": ["sports", "generation_mode", "llm"],
   "changes": {
     "sports": {
       "old": ["basketball", "soccer", "tennis"],
@@ -232,18 +253,19 @@ Each session gets a changelog file that tracks what changed from the default con
 ```
 
 **Fields:**
-- `timestamp` - When changelog was created (ISO 8601)
-- `session_id` - Which session this is for
-- `user` - Who made the change (e.g., "claude_code", "cli", "api")
-- `reason` - Required explanation of what changed and why
+- `timestamp` - When changelog was created (ISO 8601 format)
+- `session_id` - Which session this is for (generated at runtime)
+- `user` - Who initiated the run (typically "orchestrator")
+- `reason` - Explanation of why this run was executed
 - `changed_from_default` - Array of field names (quick human scan)
 - `changes` - Full old/new values (machine-auditable)
 
 **Key design:**
+- Changelog is created by the **orchestrator** at runtime, not by ConfigBuilder
 - Compares against `config.default.json` only (stable baseline)
 - "old" = value from default template
 - "new" = value in current config
-- Excludes auto-generated fields (session_id, timestamp)
+- All timestamps use ISO 8601 format exclusively
 
 ### Default Configuration
 
@@ -252,16 +274,16 @@ The `config.default.json` file provides a stable baseline for all configs:
 ```json
 {
   "sports": ["basketball", "soccer", "tennis"],
-  "session_id": null,
-  "timestamp": null,
   "retry_enabled": true,
-  "generation_mode": "template",
-  "llm_provider": "together",
-  "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+  "generation_mode": "template"
 }
 ```
 
-This file is checked into git and must exist for the system to work.
+**Important:**
+- This file is checked into git and must exist for the system to work
+- It contains only the minimal required fields
+- LLM configuration is NOT included (auto-populated when needed)
+- Session ID and timestamp are NOT included (generated at runtime)
 
 ## Important Implementation Details
 
