@@ -58,10 +58,10 @@ ConfigBuilder() \
     .save('config.json')
 
 # LLM mode (creative, requires API key)
+# Note: with_generation_mode('llm') auto-populates LLM defaults
 ConfigBuilder() \
     .with_sports(['hockey', 'volleyball', 'swimming', 'baseball']) \
     .with_generation_mode('llm') \
-    .with_llm_provider('together') \
     .save('config.json')
 ```
 

@@ -25,16 +25,18 @@ class ConfigBuilder:
     MIN_SPORTS = 3
     MAX_SPORTS = 5
 
+    # Default LLM configuration
+    DEFAULT_LLM_CONFIG = {
+        "provider": "together",
+        "model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+    }
+
     def __init__(self):
         """Initialize a new config builder."""
         self.config = {
             "sports": [],
-            "session_id": None,
-            "timestamp": None,
             "retry_enabled": True,
-            "generation_mode": "template",
-            "llm_provider": "together",
-            "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+            "generation_mode": "template"
         }
 
     def with_sports(self, sports: List[str]) -> 'ConfigBuilder':
@@ -77,40 +79,6 @@ class ConfigBuilder:
         self.config["sports"] = normalized_sports
         return self
 
-    def with_session_id(self, session_id: Optional[str] = None) -> 'ConfigBuilder':
-        """
-        Set the session ID.
-
-        Args:
-            session_id: Custom session ID, or None to auto-generate
-
-        Returns:
-            Self for method chaining
-        """
-        if session_id is None:
-            # Auto-generate session ID with timestamp
-            now = datetime.now(timezone.utc)
-            session_id = now.strftime("session_%Y%m%d_%H%M%S")
-
-        self.config["session_id"] = session_id
-        return self
-
-    def with_timestamp(self, timestamp: Optional[str] = None) -> 'ConfigBuilder':
-        """
-        Set the timestamp.
-
-        Args:
-            timestamp: ISO format timestamp, or None for current time
-
-        Returns:
-            Self for method chaining
-        """
-        if timestamp is None:
-            timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-        self.config["timestamp"] = timestamp
-        return self
-
     def with_retry(self, enabled: bool = True) -> 'ConfigBuilder':
         """
         Set retry behavior.
@@ -126,7 +94,7 @@ class ConfigBuilder:
 
     def with_generation_mode(self, mode: str) -> 'ConfigBuilder':
         """
-        Set the generation mode.
+        Set generation mode and auto-populate mode-specific defaults.
 
         Args:
             mode: Either "template" or "llm"
@@ -144,11 +112,16 @@ class ConfigBuilder:
             )
 
         self.config["generation_mode"] = mode
+
+        # Auto-populate LLM defaults when switching to LLM mode
+        if mode == "llm" and "llm" not in self.config:
+            self.config["llm"] = self.DEFAULT_LLM_CONFIG.copy()
+
         return self
 
     def with_llm_provider(self, provider: str) -> 'ConfigBuilder':
         """
-        Set the LLM provider.
+        Set LLM provider (auto-enables LLM mode if needed).
 
         Args:
             provider: Either "together" or "huggingface"
@@ -165,12 +138,17 @@ class ConfigBuilder:
                 f"Must be one of: {', '.join(self.VALID_LLM_PROVIDERS)}"
             )
 
-        self.config["llm_provider"] = provider
+        # Ensure LLM config exists
+        if "llm" not in self.config:
+            self.config["llm"] = self.DEFAULT_LLM_CONFIG.copy()
+
+        self.config["llm"]["provider"] = provider
+        self.config["generation_mode"] = "llm"
         return self
 
     def with_llm_model(self, model: str) -> 'ConfigBuilder':
         """
-        Set the LLM model.
+        Set LLM model (auto-enables LLM mode if needed).
 
         Args:
             model: Model identifier (provider-specific)
@@ -178,7 +156,12 @@ class ConfigBuilder:
         Returns:
             Self for method chaining
         """
-        self.config["llm_model"] = model
+        # Ensure LLM config exists
+        if "llm" not in self.config:
+            self.config["llm"] = self.DEFAULT_LLM_CONFIG.copy()
+
+        self.config["llm"]["model"] = model
+        self.config["generation_mode"] = "llm"
         return self
 
     def validate(self) -> Dict[str, Any]:
@@ -195,17 +178,13 @@ class ConfigBuilder:
         if not self.config["sports"]:
             raise ConfigValidationError("Sports list is required")
 
-        if self.config["session_id"] is None:
-            raise ConfigValidationError("Session ID is required")
-
-        if self.config["timestamp"] is None:
-            raise ConfigValidationError("Timestamp is required")
-
         # Validate LLM mode requirements
         if self.config["generation_mode"] == "llm":
-            if not self.config["llm_provider"]:
+            if "llm" not in self.config:
+                raise ConfigValidationError("LLM configuration required for LLM mode")
+            if not self.config["llm"].get("provider"):
                 raise ConfigValidationError("LLM provider is required for LLM mode")
-            if not self.config["llm_model"]:
+            if not self.config["llm"].get("model"):
                 raise ConfigValidationError("LLM model is required for LLM mode")
 
         return self.config
@@ -214,31 +193,20 @@ class ConfigBuilder:
         """
         Build and validate the configuration.
 
-        Auto-generates session_id and timestamp if not set.
-
         Returns:
             The validated config dictionary
 
         Raises:
             ConfigValidationError: If validation fails
         """
-        # Auto-generate missing fields
-        if self.config["session_id"] is None:
-            self.with_session_id()
-
-        if self.config["timestamp"] is None:
-            self.with_timestamp()
-
         return self.validate()
 
-    def save(self, path: str = "config.json", reason: Optional[str] = None, user: str = "unknown") -> Path:
+    def save(self, path: str = "config.json") -> Path:
         """
-        Build, validate, and save the configuration to a file with changelog.
+        Build, validate, and save the configuration to a file.
 
         Args:
             path: Path to save the config file
-            reason: Explanation of what changed and why (default: "Configuration saved")
-            user: Who made the change (e.g., "claude_code", "cli", "api")
 
         Returns:
             Path object of the saved file
@@ -246,7 +214,11 @@ class ConfigBuilder:
         Raises:
             ConfigValidationError: If validation fails
         """
-        return self.save_with_changelog(config_path=path, reason=reason, user=user)
+        config = self.build()
+        config_file_path = Path(path)
+        with open(config_file_path, "w") as f:
+            json.dump(config, f, indent=2)
+        return config_file_path
 
     @staticmethod
     def from_dict(data: Dict[str, Any]) -> 'ConfigBuilder':
@@ -301,69 +273,6 @@ class ConfigBuilder:
             )
         return ConfigBuilder.load(path)
 
-    def save_with_changelog(self,
-                           config_path: str = "config.json",
-                           reason: Optional[str] = None,
-                           user: str = "unknown") -> Path:
-        """
-        Save config and write changelog to session directory.
-
-        Args:
-            config_path: Where to save config (default: config.json)
-            reason: Explanation of what changed and why (default: "Configuration saved")
-            user: Who made the change (e.g., "claude_code", "cli", "api")
-
-        Returns:
-            Path to saved config file
-
-        Side effects:
-            - Writes config to config_path
-            - Creates output/{session_id}/ directory
-            - Writes output/{session_id}/config.changelog.json
-
-        Raises:
-            ConfigValidationError: If validation fails
-        """
-        if reason is None:
-            reason = "Configuration saved"
-
-        # Build and validate new config
-        new_config = self.build()
-
-        # Load default config (always compare against this baseline)
-        default_builder = ConfigBuilder.load_default()
-        default_config = default_builder.config
-
-        # Compute diff vs default (exclude auto-generated fields)
-        changed_from_default, changes = compute_changes_from_default(
-            default_config, new_config
-        )
-
-        # Save new config
-        config_file_path = Path(config_path)
-        with open(config_file_path, "w") as f:
-            json.dump(new_config, f, indent=2)
-
-        # Write changelog to session directory
-        session_id = new_config["session_id"]
-        session_dir = Path(f"output/{session_id}")
-        session_dir.mkdir(parents=True, exist_ok=True)
-
-        changelog = {
-            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "session_id": session_id,
-            "user": user,
-            "reason": reason,
-            "changed_from_default": changed_from_default,
-            "changes": changes
-        }
-
-        changelog_path = session_dir / "config.changelog.json"
-        with open(changelog_path, "w") as f:
-            json.dump(changelog, f, indent=2)
-
-        return config_file_path
-
 
 def compute_changes_from_default(default_config: Dict[str, Any],
                                  new_config: Dict[str, Any]) -> tuple:
@@ -379,15 +288,10 @@ def compute_changes_from_default(default_config: Dict[str, Any],
             - changed_field_names: List of field names that changed
             - detailed_changes_dict: Dict mapping field names to {old, new} values
     """
-    EXCLUDE_FIELDS = {"session_id", "timestamp"}
-
     changed_fields = []
     changes = {}
 
     for key in new_config:
-        if key in EXCLUDE_FIELDS:
-            continue
-
         default_value = default_config.get(key)
         new_value = new_config[key]
 
@@ -437,9 +341,7 @@ def create_config_interactive() -> ConfigBuilder:
         print("  2. huggingface")
         provider_choice = input("> ").strip()
         provider = "huggingface" if provider_choice == "2" else "together"
-        # Only set if different from default (together)
-        if provider != "together":
-            builder.with_llm_provider(provider)
+        builder.with_llm_provider(provider)
 
     return builder
 

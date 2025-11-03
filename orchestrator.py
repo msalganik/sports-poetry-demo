@@ -13,10 +13,65 @@ import os
 import subprocess
 import uuid
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any
 import threading
 import concurrent.futures
+
+
+def generate_session_id() -> str:
+    """
+    Generate unique session ID with timestamp and random suffix.
+
+    Returns:
+        Session ID in format: session_YYYYMMDD_HHMMSS_xxxxxx
+
+    Example:
+        "session_20251103_133032_a3f9c2"
+    """
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    random_suffix = uuid.uuid4().hex[:6]  # 6 hex chars = 24 bits randomness
+    return f"session_{timestamp}_{random_suffix}"
+
+
+def create_session_changelog(config: Dict[str, Any], session_id: str,
+                            session_dir: Path, user: str = "orchestrator",
+                            reason: str = "Workflow execution") -> None:
+    """
+    Create changelog comparing current config against defaults.
+
+    Args:
+        config: Current configuration
+        session_id: Generated session identifier
+        session_dir: Path to session output directory
+        user: Who initiated the run
+        reason: Why this run was executed
+    """
+    from config_builder import ConfigBuilder, compute_changes_from_default
+
+    # Load default config for comparison
+    default_builder = ConfigBuilder.load_default()
+    default_config = default_builder.config
+
+    # Compute differences
+    changed_from_default, changes = compute_changes_from_default(
+        default_config, config
+    )
+
+    # Create changelog
+    changelog = {
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "session_id": session_id,
+        "user": user,
+        "reason": reason,
+        "changed_from_default": changed_from_default,
+        "changes": changes
+    }
+
+    # Write to session directory
+    changelog_path = session_dir / "config.changelog.json"
+    with open(changelog_path, "w") as f:
+        json.dump(changelog, f, indent=2)
 
 
 class ProvenanceLogger:
@@ -34,8 +89,7 @@ class ProvenanceLogger:
     def log_event(self, actor: str, action: str, details: Dict[str, Any] = None, message: str = None):
         """Log a single event with timestamp and full context."""
         entry = {
-            "timestamp": time.time(),
-            "timestamp_iso": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "actor": actor,
             "action": action
         }
@@ -67,6 +121,7 @@ class SportsPoetryOrchestrator:
         self.agent_results = []
         self.errors = []
         self.session_dir = None  # Will be set after reading config
+        self.session_id = None  # Will be set during run()
 
     def read_config(self) -> Dict[str, Any]:
         """Read and validate configuration file."""
@@ -386,7 +441,7 @@ class SportsPoetryOrchestrator:
 
         usage_entry = {
             "session_id": config.get("session_id", "unknown"),
-            "timestamp": config.get("timestamp", datetime.utcnow().isoformat() + "Z"),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "sports": config.get("sports", []),
             "sports_count": len(config.get("sports", [])),
             "validation": "pass",  # Assuming config is valid if we got here
@@ -427,8 +482,23 @@ class SportsPoetryOrchestrator:
             if not sports:
                 raise ValueError("No sports found in config")
 
+            # Generate session ID at runtime
+            self.session_id = generate_session_id()
+
+            # Add session_id to config for passing to agents
+            config["session_id"] = self.session_id
+
             # Phase 1.5: Create session directory
             self.session_dir = self.create_session_directory(config)
+
+            # Create changelog
+            create_session_changelog(
+                config,
+                self.session_id,
+                self.session_dir,
+                user="orchestrator",
+                reason="Workflow execution"
+            )
 
             # Move early logs from root to session directory
             root_log = Path("execution_log.jsonl")
