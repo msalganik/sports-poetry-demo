@@ -74,7 +74,52 @@ def analyze_form_adherence(poems: List[Dict[str, Any]]) -> Dict[str, Any]:
     return analysis
 
 
-def generate_analysis_report(poems: List[Dict[str, Any]]) -> str:
+def analyze_execution_logs(session_dir: str) -> Dict[str, Any]:
+    """Read and analyze execution_log.jsonl for actual workflow data."""
+    log_file = Path(session_dir) / "execution_log.jsonl"
+
+    if not log_file.exists():
+        return {}
+
+    stats = {
+        "total_events": 0,
+        "agents_launched": 0,
+        "agents_completed": 0,
+        "agents_failed": 0,
+        "retry_count": 0,
+        "events_by_action": {}
+    }
+
+    with open(log_file, "r") as f:
+        for line in f:
+            if line.strip():
+                event = json.loads(line)
+                stats["total_events"] += 1
+
+                action = event.get("action", "unknown")
+                actor = event.get("actor", "unknown")
+                stats["events_by_action"][action] = stats["events_by_action"].get(action, 0) + 1
+
+                # Track agent launches
+                if action == "launch_agent":
+                    stats["agents_launched"] += 1
+                    # Check if this is a retry (attempt > 1)
+                    if event.get("details", {}).get("attempt", 1) > 1:
+                        stats["retry_count"] += 1
+
+                # Track agent completions (actor starts with "agent_" and action is "complete")
+                elif action == "complete" and actor.startswith("agent_"):
+                    stats["agents_completed"] += 1
+
+                # Track failures from agents_complete summary
+                elif action == "agents_complete":
+                    failed = event.get("details", {}).get("failed", 0)
+                    stats["agents_failed"] = failed
+
+    return stats
+
+
+def generate_analysis_report(poems: List[Dict[str, Any]], session_dir: str = "output") -> str:
     """Generate comprehensive markdown analysis report."""
     # In production: Use LLM to generate sophisticated analysis
     # This is a template-based version for demo purposes
@@ -92,7 +137,7 @@ def generate_analysis_report(poems: List[Dict[str, Any]]) -> str:
     report.append("## Executive Summary\n")
     report.append(f"This report analyzes poetry generated for {len(poems)} different sports. ")
     report.append("Each sport is represented by a haiku (3-line poem) and a sonnet (14-line poem). ")
-    report.append("The analysis examines form adherence, thematic content, and comparative quality.\n")
+    report.append("The analysis examines form adherence and execution metrics.\n")
 
     # Form Analysis
     form_analysis = analyze_form_adherence(poems)
@@ -133,42 +178,21 @@ def generate_analysis_report(poems: List[Dict[str, Any]]) -> str:
         report.append(f"- Sonnet: {metadata.get('sonnet_lines', 0)} lines, {metadata.get('sonnet_words', 0)} words\n")
         report.append(f"- Generation time: {metadata.get('duration_s', 0)}s\n")
 
-        # Simple thematic analysis
-        report.append(f"\n**Thematic Notes:**\n")
-        report.append(f"The {sport} haiku captures the essence of the sport through vivid imagery. ")
-        report.append(f"The sonnet explores deeper themes of competition, skill, and human achievement in {sport}.\n")
+    # Workflow Execution Analysis
+    exec_stats = analyze_execution_logs(session_dir)
+    if exec_stats:
+        report.append("\n## Workflow Execution Analysis\n")
+        report.append(f"**Total Events Logged:** {exec_stats['total_events']}\n\n")
+        report.append(f"**Agent Statistics:**\n")
+        report.append(f"- Agents Launched: {exec_stats['agents_launched']}\n")
+        report.append(f"- Agents Completed: {exec_stats['agents_completed']}\n")
+        report.append(f"- Agents Failed: {exec_stats['agents_failed']}\n")
+        report.append(f"- Retry Attempts: {exec_stats['retry_count']}\n")
 
-    # Comparative Analysis
-    report.append("\n## Comparative Analysis\n")
-
-    report.append("\n### Best Haiku\n")
-    # In production, LLM would actually analyze and pick best
-    # For demo, we'll pick the first one
-    if poems:
-        best_haiku_sport = poems[0]["sport"]
-        report.append(f"**Winner: {best_haiku_sport.title()}**\n\n")
-        report.append("```\n")
-        report.append(poems[0]["haiku"])
-        report.append("```\n\n")
-        report.append(f"**Justification:** The {best_haiku_sport} haiku demonstrates excellent use of imagery and ")
-        report.append("adheres to traditional form while capturing the dynamic nature of the sport.\n")
-
-    report.append("\n### Best Sonnet\n")
-    if poems:
-        best_sonnet_sport = poems[-1]["sport"]
-        report.append(f"**Winner: {best_sonnet_sport.title()}**\n\n")
-        report.append("```\n")
-        report.append(poems[-1]["sonnet"])
-        report.append("```\n\n")
-        report.append(f"**Justification:** The {best_sonnet_sport} sonnet excels in exploring the deeper philosophical ")
-        report.append("dimensions of sport, using sophisticated language and maintaining consistent meter.\n")
-
-    # Overall Observations
-    report.append("\n## Overall Observations\n")
-    report.append("1. **Form Quality:** All poems successfully attempted traditional poetic forms.\n")
-    report.append("2. **Thematic Depth:** Haikus focused on immediate sensory experience, while sonnets explored deeper meanings.\n")
-    report.append("3. **Sport Representation:** Each sport's unique characteristics were well-captured.\n")
-    report.append("4. **Technical Execution:** Consistent quality across all generated works.\n")
+        if exec_stats['events_by_action']:
+            report.append(f"\n**Event Breakdown:**\n")
+            for action, count in sorted(exec_stats['events_by_action'].items()):
+                report.append(f"- {action}: {count}\n")
 
     # Failed/Missing Sports
     report.append("\n## Missing or Failed Sports\n")
@@ -208,7 +232,7 @@ def main():
     print(f"Analyzer: Found {len(poems)} sports to analyze")
 
     # Generate report
-    report = generate_analysis_report(poems)
+    report = generate_analysis_report(poems, session_dir)
 
     # Write report to session directory
     output_file = Path(session_dir) / "analysis_report.md"
