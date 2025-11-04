@@ -1,4 +1,7 @@
-# create_config
+---
+name: create-config
+description: Create and manage configuration files for sports poetry generation with complete parameter collection
+---
 
 Create and manage configuration files for sports poetry generation with complete parameter collection.
 
