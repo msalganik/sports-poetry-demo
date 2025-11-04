@@ -14,7 +14,7 @@ This demo showcases how to build agentic workflows with:
 ## What It Does
 
 1. **You tell Claude** which 3-5 sports you want poems about
-2. **Claude validates** and writes `config.json`
+2. **Claude validates** and writes timestamped config file
 3. **Orchestrator launches** parallel poetry agents (one per sport)
 4. **Each agent generates** a haiku and sonnet about their sport
 5. **Analyzer agent** compares all poems and creates a report
@@ -24,7 +24,7 @@ This demo showcases how to build agentic workflows with:
 
 ### Step 1: Create Configuration
 
-You can create `config.json` in **two ways**:
+You can create configuration files in **two ways**:
 
 #### Option A: Interactive with Claude (Recommended for First-Time Users)
 
@@ -35,7 +35,7 @@ You: Let's run the demo! I want poems about basketball, soccer, and tennis.
 
 Claude: Great! I'll create the config file...
        [Uses create_config skill to collect all parameters]
-       ✓ Created config.json
+       ✓ Created output/configs/config_20251103_184500.json
 ```
 
 The Claude skill will:
@@ -51,18 +51,24 @@ Use the `config_builder.py` module:
 
 ```python
 from config_builder import ConfigBuilder
+from datetime import datetime
+
+# Generate timestamp for config file
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+config_path = f"output/configs/config_{timestamp}.json"
 
 # Template mode (fast, deterministic)
 ConfigBuilder() \
     .with_sports(['basketball', 'soccer', 'tennis']) \
-    .save('config.json')
+    .save(config_path)
 
 # LLM mode (creative, requires API key)
 # Note: with_generation_mode('llm') auto-populates LLM defaults
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 ConfigBuilder() \
     .with_sports(['hockey', 'volleyball', 'swimming', 'baseball']) \
     .with_generation_mode('llm') \
-    .save('config.json')
+    .save(f"output/configs/config_{timestamp}.json")
 ```
 
 See [CONFIG_GUIDE.md](CONFIG_GUIDE.md) for complete documentation.
@@ -71,7 +77,7 @@ See [CONFIG_GUIDE.md](CONFIG_GUIDE.md) for complete documentation.
 
 ```bash
 cd sports_poetry_demo
-python3 orchestrator.py
+python3 orchestrator.py --config output/configs/config_20251103_184500.json
 ```
 
 Watch the output as agents work in parallel:
@@ -150,7 +156,7 @@ cat output/latest/usage_log.jsonl | jq .
 ```
 User ↔ Claude (natural language)
          ↓
-    config.json
+output/configs/config_TIMESTAMP.json
          ↓
   orchestrator.py
          ↓
@@ -171,7 +177,7 @@ Agent 1   Agent 2  Agent 3  Agent N  (parallel)
 ## Files
 
 ### Input
-- `config.json` - Created by Claude from your input
+- `output/configs/config_TIMESTAMP.json` - Timestamped config created by create_config skill
 
 ### Scripts
 - `orchestrator.py` - Main coordinator
@@ -301,13 +307,17 @@ Generates unique, creative poems using a language model. Requires API access.
    ```bash
    export TOGETHER_API_KEY="your-api-key-here"
    ```
-5. Update `config.json`:
-   ```json
-   {
-     "generation_mode": "llm",
-     "llm_provider": "together",
-     "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
-   }
+5. Create config with LLM mode enabled using the create_config skill or ConfigBuilder:
+   ```python
+   from config_builder import ConfigBuilder
+   from datetime import datetime
+
+   timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+   ConfigBuilder() \
+       .with_sports(['basketball', 'soccer', 'tennis']) \
+       .with_generation_mode('llm') \
+       .with_llm_provider('together') \
+       .save(f"output/configs/config_{timestamp}.json")
    ```
 
 Available free models on Together.ai:
@@ -329,13 +339,17 @@ See more at: https://www.together.ai/models
    ```bash
    export HUGGINGFACE_API_TOKEN="your-token-here"
    ```
-5. Update `config.json`:
-   ```json
-   {
-     "generation_mode": "llm",
-     "llm_provider": "huggingface",
-     "llm_model": "meta-llama/Meta-Llama-3-8B-Instruct"
-   }
+5. Create config with LLM mode enabled using the create_config skill or ConfigBuilder:
+   ```python
+   from config_builder import ConfigBuilder
+   from datetime import datetime
+
+   timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+   ConfigBuilder() \
+       .with_sports(['basketball', 'soccer', 'tennis']) \
+       .with_generation_mode('llm') \
+       .with_llm_provider('huggingface') \
+       .save(f"output/configs/config_{timestamp}.json")
    ```
 
 ### Running with LLM Mode
@@ -362,7 +376,7 @@ The generated poems will be unique for each sport and each run!
 
 ### Two Ways to Configure
 
-This project provides two complementary approaches for creating `config.json`:
+This project provides two complementary approaches for creating configuration files:
 
 | Approach | Best For | Testable | Repeatable | Documentation |
 |----------|----------|----------|------------|---------------|
@@ -390,38 +404,51 @@ All configs require these parameters:
 **Quick template config:**
 ```python
 from config_builder import ConfigBuilder
+from datetime import datetime
 
-ConfigBuilder().with_sports(['basketball', 'soccer', 'tennis']).save('config.json')
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+ConfigBuilder() \
+    .with_sports(['basketball', 'soccer', 'tennis']) \
+    .save(f'output/configs/config_{timestamp}.json')
 ```
 
 **Full LLM config:**
 ```python
 from config_builder import ConfigBuilder
+from datetime import datetime
 
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 ConfigBuilder() \
     .with_sports(['hockey', 'volleyball', 'swimming', 'baseball']) \
     .with_generation_mode('llm') \
     .with_llm_provider('together') \
     .with_retry(True) \
-    .save('config.json')
+    .save(f'output/configs/config_{timestamp}.json')
 ```
 
 **Load and modify existing config:**
 ```python
 from config_builder import ConfigBuilder
+from datetime import datetime
 
-builder = ConfigBuilder.load('config.json')
-builder.with_generation_mode('llm').save('config.json')
+# Load existing config
+builder = ConfigBuilder.load('output/configs/config_20251103_120000.json')
+
+# Modify and save to new timestamped file
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+builder.with_generation_mode('llm').save(f'output/configs/config_{timestamp}.json')
 ```
 
 **Validation:**
 ```python
 from config_builder import ConfigBuilder, ConfigValidationError
+from datetime import datetime
 
 try:
     builder = ConfigBuilder()
     builder.with_sports(['basketball', 'soccer'])  # Too few!
-    builder.save('config.json')
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    builder.save(f'output/configs/config_{timestamp}.json')
 except ConfigValidationError as e:
     print(f"Error: {e}")
     # Output: "Must specify at least 3 sports (got 2)"
@@ -468,22 +495,31 @@ orchestrator = SportsPoetryOrchestrator(retry_enabled=False)
 
 ### Switch Generation Modes
 
-Template mode (fast, deterministic):
-```bash
-# Edit config.json
-{
-  "generation_mode": "template"
-}
+Create a new config with desired mode using ConfigBuilder:
+
+**Template mode (fast, deterministic):**
+```python
+from config_builder import ConfigBuilder
+from datetime import datetime
+
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+ConfigBuilder() \
+    .with_sports(['basketball', 'soccer', 'tennis']) \
+    .with_generation_mode('template') \
+    .save(f'output/configs/config_{timestamp}.json')
 ```
 
-LLM mode (creative, unique):
-```bash
-# Edit config.json
-{
-  "generation_mode": "llm",
-  "llm_provider": "together",
-  "llm_model": "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
-}
+**LLM mode (creative, unique):**
+```python
+from config_builder import ConfigBuilder
+from datetime import datetime
+
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+ConfigBuilder() \
+    .with_sports(['basketball', 'soccer', 'tennis']) \
+    .with_generation_mode('llm') \
+    .with_llm_provider('together') \
+    .save(f'output/configs/config_{timestamp}.json')
 ```
 
 ## Advanced Usage

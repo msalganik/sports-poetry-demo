@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a **Sports Poetry Multi-Agent Workflow Demo** that showcases multi-agent coordination with parallel execution, provenance logging, and result synthesis.
 
-**Workflow**: User provides sports list → Claude validates and creates config.json → Orchestrator launches parallel poetry agents → Each agent generates haiku + sonnet → Analyzer synthesizes results → Full audit logs created
+**Workflow**: User provides sports list → Claude validates and creates timestamped config file → Orchestrator launches parallel poetry agents → Each agent generates haiku + sonnet → Analyzer synthesizes results → Full audit logs created
 
 ## Common Commands
 
@@ -14,10 +14,10 @@ This is a **Sports Poetry Multi-Agent Workflow Demo** that showcases multi-agent
 
 ```bash
 cd sports_poetry_demo
-python3 orchestrator.py
+python3 orchestrator.py --config output/configs/config_TIMESTAMP.json
 ```
 
-Requires a valid `config.json` file in the sports_poetry_demo directory. Claude Code typically creates this file interactively based on user input.
+Requires a valid config file. Claude Code typically creates timestamped config files in `output/configs/` interactively based on user input. The orchestrator can also use a default config path if `--config` is not specified.
 
 ### Testing
 
@@ -94,9 +94,8 @@ sports_poetry_demo/
 ├── analyzer_agent.py        # Result synthesis
 ├── config_builder.py        # Configuration builder with validation
 ├── config.default.json      # Default configuration template (in git)
-├── config.json              # Active runtime configuration (gitignored)
 ├── output/
-│   ├── configs/            # Pre-run configs (optional, for reuse)
+│   ├── configs/            # Timestamped input configs created by skill
 │   │   └── config_TIMESTAMP.json
 │   ├── {session_id}/       # Per-run isolated outputs
 │   │   ├── config.json     # Full config copy (session-specific)
@@ -118,13 +117,13 @@ sports_poetry_demo/
 
 ## Working with This Codebase
 
-### Creating config.json
+### Creating Configuration Files
 
 When users request to run the demo, Claude Code should:
 1. Load the default configuration from `config.default.json`
 2. Ask for 3-5 sports (or use the provided list)
 3. Validate the count
-4. Create `sports_poetry_demo/config.json` with:
+4. Create timestamped config file in `output/configs/config_TIMESTAMP.json` with:
    - sports list
    - retry_enabled setting
    - generation_mode (template or llm)
@@ -137,27 +136,29 @@ When users request to run the demo, Claude Code should:
 **Usage pattern:**
 ```python
 from config_builder import ConfigBuilder
+from datetime import datetime
 
 # Template mode (minimal config)
 builder = ConfigBuilder.load_default()
 builder.with_sports(["hockey", "swimming", "volleyball"])
-builder.save()  # Saves to config.json
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+builder.save(f"output/configs/config_{timestamp}.json")
 
 # LLM mode (auto-populates LLM defaults)
 builder = ConfigBuilder.load_default()
 builder.with_sports(["hockey", "swimming", "volleyball"])
 builder.with_generation_mode("llm")  # Auto-adds llm config
-builder.save()
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+builder.save(f"output/configs/config_{timestamp}.json")
 ```
 
 ### Config File Storage Pattern
 
 The system uses a two-location pattern for config files:
 
-1. **Input Location** (optional):
-   - `config.json` in root directory OR
-   - `output/configs/config_TIMESTAMP.json` for named/reusable configs
-   - Used by orchestrator via `--config` flag
+1. **Input Location**:
+   - `output/configs/config_TIMESTAMP.json` - Timestamped configs created by the skill
+   - Used by orchestrator via `--config` flag (required)
 
 2. **Session Copy** (automatic):
    - Orchestrator copies input config to `output/{session_id}/config.json`
@@ -166,14 +167,14 @@ The system uses a two-location pattern for config files:
 
 **Typical workflow:**
 ```bash
-# Create config (saves to config.json by default)
-python3 config_builder.py interactive
+# Create config via skill (saves to output/configs/config_TIMESTAMP.json)
+# Claude Code skill handles this interactively
 
-# Run orchestrator (reads config.json, copies to session)
-python3 orchestrator.py
-
-# Or with explicit config path
+# Run orchestrator with explicit config path
 python3 orchestrator.py --config output/configs/config_20251103_204829.json
+
+# Or with default config path (if configured)
+python3 orchestrator.py
 ```
 
 **Self-contained sessions:**
@@ -333,7 +334,7 @@ The `config.default.json` file provides a stable baseline for all configs:
 
 ## Common Issues
 
-**"No config found"**: Create config.json in sports_poetry_demo/ directory
+**"No config found"**: Create a config file using the create_config skill or specify path with `--config` flag
 **Agent timeout**: Increase timeout value at orchestrator.py:156
 **LLM mode fails**: Check API key is set and requirements.txt is installed
 **Permission errors on symlink**: Windows may require admin rights; can be disabled if needed
