@@ -113,7 +113,7 @@ Simply ask Claude to create a configuration:
 ```
 You: "Create a config for basketball, soccer, and tennis"
 
-Claude: [Uses config_manager skill]
+Claude: [Uses create_config skill]
         ✓ Created config.json with:
           - Sports: basketball, soccer, tennis
           - Mode: template
@@ -434,4 +434,4 @@ config_template_mode.json
 - **API Reference**: Complete ConfigBuilder API documentation
 - **README.md**: Project overview and quick start
 - **CLAUDE.md**: Claude Code guidance for this repository
-- **Skill Documentation**: `.claude/skills/config_manager.md`
+- **Skill Documentation**: `.claude/skills/create_config.md`

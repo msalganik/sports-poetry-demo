@@ -11,7 +11,7 @@ A **hybrid configuration generation system** that provides both programmatic and
 │                 User Interface Layer                │
 ├─────────────────────────┬───────────────────────────┤
 │   Python API            │   Claude Skill            │
-│   config_builder.py     │   config_manager.md       │
+│   config_builder.py     │   create_config.md        │
 │                         │                           │
 │   • Programmatic        │   • Natural language      │
 │   • Testable            │   • Conversational        │
@@ -83,7 +83,7 @@ ConfigBuilder() \
 38 tests passed in 0.12s
 ```
 
-### 3. Claude Skill (`.claude/skills/config_manager.md`)
+### 3. Claude Skill (`.claude/skills/create_config.md`)
 
 **Purpose**: Natural language interface for interactive config creation
 
@@ -296,7 +296,7 @@ sports_poetry_demo/
 │   └── test_config_builder.py     # Unit tests (398 lines, 38 tests)
 ├── .claude/
 │   └── skills/
-│       └── config_manager.md      # Claude Skill (492 lines)
+│       └── create_config.md       # Claude Skill (492 lines)
 ├── CONFIG_GUIDE.md                # User guide (428 lines)
 └── HYBRID_CONFIG_SUMMARY.md       # This file
 ```
@@ -443,7 +443,7 @@ This demonstrates software engineering best practices:
 ## Next Steps
 
 1. **Update README.md** - Add hybrid approach to main docs
-2. **Update CLAUDE.md** - Reference config_manager skill
+2. **Update CLAUDE.md** - Reference create_config skill
 3. **Test skill in practice** - Use it to create configs
 4. **Gather feedback** - Improve based on real usage
 5. **Consider CLI tool** - If command-line usage needed

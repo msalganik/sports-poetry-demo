@@ -497,7 +497,7 @@ def test_changelog_required_fields():
 7. Verify existing tests still pass
 
 **Phase 3: Documentation** (1 hour)
-8. Update `.claude/skills/config_manager.md` for new flow
+8. Update `.claude/skills/create_config.md` for new flow
 9. Update `CLAUDE.md` with changelog examples
 10. Add `config.default.json` to README
 
@@ -506,7 +506,7 @@ def test_changelog_required_fields():
 **Files to modify:**
 - `config_builder.py` - Add 2 methods (~50 lines)
 - `tests/test_config_builder.py` - Add tests (~150 lines)
-- `.claude/skills/config_manager.md` - Update skill instructions
+- `.claude/skills/create_config.md` - Update skill instructions
 - `CLAUDE.md` - Update docs
 
 **Files to create:**
@@ -519,7 +519,7 @@ def test_changelog_required_fields():
 **To modify:**
 - `config_builder.py` - Add `load_default()` and `save_with_changelog()`
 - `tests/test_config_builder.py` - Add new unit tests
-- `.claude/skills/config_manager.md` - Update skill for new flow
+- `.claude/skills/create_config.md` - Update skill for new flow
 - `CLAUDE.md` - Document changelog feature
 
 **To create:**

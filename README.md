@@ -34,7 +34,7 @@ Just chat with Claude Code:
 You: Let's run the demo! I want poems about basketball, soccer, and tennis.
 
 Claude: Great! I'll create the config file...
-       [Uses config_manager skill to collect all parameters]
+       [Uses create_config skill to collect all parameters]
        ✓ Created config.json
 ```
 
@@ -366,7 +366,7 @@ This project provides two complementary approaches for creating `config.json`:
 
 | Approach | Best For | Testable | Repeatable | Documentation |
 |----------|----------|----------|------------|---------------|
-| **Claude Skill** | Interactive use, demos, first-time users | Integration tests | Conversational | [config_manager skill](.claude/skills/config_manager.md) |
+| **Claude Skill** | Interactive use, demos, first-time users | Integration tests | Conversational | [create_config skill](.claude/skills/create_config.md) |
 | **Python API** | Scripts, CI/CD, automation, testing | ✅ Unit tests | ✅ Deterministic | [CONFIG_GUIDE.md](CONFIG_GUIDE.md) |
 
 ### Configuration Parameters

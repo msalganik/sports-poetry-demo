@@ -1,4 +1,4 @@
-# config_manager
+# create_config
 
 Create and manage configuration files for sports poetry generation with complete parameter collection.
 
