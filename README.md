@@ -153,26 +153,120 @@ cat output/latest/usage_log.jsonl | jq .
 
 ## Architecture
 
+### Four-Layer Design
+
+This demo separates concerns across four distinct layers:
+
 ```
-User ↔ Claude (natural language)
-         ↓
-output/configs/config_TIMESTAMP.json
-         ↓
-  orchestrator.py
-         ↓
-    ┌────┴────┬────────┬────────┐
-    ▼         ▼        ▼        ▼
-Agent 1   Agent 2  Agent 3  Agent N  (parallel)
-    │         │        │        │
-    └────┬────┴────────┴────────┘
-         ▼
-   Analyzer Agent
-         ↓
-  output/{session_id}/
-    analysis_report.md
-    execution_log.jsonl
-    usage_log.jsonl
+┌─────────────────────────────────────────────────────────────┐
+│ LAYER 1: 👤 USER & 🤖 CLAUDE CODE (Configuration)           │
+│                                                              │
+│  👤 User: "I want poems about baseball, basketball, football"│
+│    ↓                                                         │
+│  🤖 Claude: Validates sports list (3-5 required)             │
+│            Creates timestamped config file                   │
+│            Checks API keys (if LLM mode)                     │
+│    ↓                                                         │
+│  📄 output/configs/config_20251103_225304.json               │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ LAYER 2: 🐍 PYTHON ORCHESTRATION (Workflow Management)      │
+│                                                              │
+│  🐍 orchestrator.py:                                         │
+│    • Reads config file                                       │
+│    • Generates unique session_id                             │
+│    • Creates session directory                               │
+│    • Copies config to session directory                      │
+│    • Creates config.changelog.json                           │
+│    • Launches N poetry agents in parallel (ThreadPool)      │
+│    • Monitors completion/failures                            │
+│    • Retries failed agents (optional)                        │
+│    • Waits for all agents to complete                        │
+│    • Launches analyzer agent (sequential)                    │
+│    • Writes provenance logs (execution_log.jsonl)           │
+│    • Writes usage analytics (usage_log.jsonl)               │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ LAYER 3: 🐍 POETRY AGENTS (Parallel Poem Generation)        │
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
+│  │ 🐍 poetry_agent│ │ 🐍 poetry_agent│ │ 🐍 poetry_agent│  │
+│  │   (baseball) │  │ (basketball) │  │  (football)  │     │
+│  │              │  │              │  │              │     │
+│  │ • Generate   │  │ • Generate   │  │ • Generate   │     │
+│  │   haiku      │  │   haiku      │  │   haiku      │     │
+│  │ • Generate   │  │ • Generate   │  │ • Generate   │     │
+│  │   sonnet     │  │   sonnet     │  │   sonnet     │     │
+│  │ • Write      │  │ • Write      │  │ • Write      │     │
+│  │   metadata   │  │   metadata   │  │   metadata   │     │
+│  └──────────────┘  └──────────────┘  └──────────────┘     │
+│                                                              │
+│  All agents run in parallel via ThreadPoolExecutor          │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+            (wait for all to complete)
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ LAYER 4: 🐍 ANALYZER AGENT (Sequential Synthesis)           │
+│                                                              │
+│  🐍 analyzer_agent.py:                                       │
+│    • Reads all generated poems from Layer 3                  │
+│    • Reads execution_log.jsonl for workflow stats            │
+│    • Validates form adherence (haiku = 3 lines, etc.)       │
+│    • Compares content across sports                          │
+│    • Identifies missing sports (if any failed)               │
+│    • Writes analysis_report.md                               │
+│                                                              │
+│  Runs AFTER all poetry agents complete                       │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+                   OUTPUT FILES:
+          output/session_YYYYMMDD_HHMMSS_xxxxxx/
+            ├── baseball/haiku.txt, sonnet.txt, metadata.json
+            ├── basketball/haiku.txt, sonnet.txt, metadata.json
+            ├── football/haiku.txt, sonnet.txt, metadata.json
+            ├── analysis_report.md
+            ├── config.json
+            ├── config.changelog.json
+            ├── execution_log.jsonl
+            └── usage_log.jsonl
 ```
+
+### Responsibility Breakdown
+
+| Component | Role | Language | Execution Model | Key Responsibilities |
+|-----------|------|----------|----------------|---------------------|
+| 👤 **User** | Input provider | Natural language | Interactive | Specify 3-5 sports, choose generation mode |
+| 🤖 **Claude Code** | Config builder | Python (via skill) | Interactive | Validate input, create timestamped config, check API keys |
+| 🐍 **orchestrator.py** | Workflow coordinator | Python | Sequential | Launch agents, manage retries, coordinate layers, log everything |
+| 🐍 **poetry_agent.py** | Worker (subprocess) | Python | **Parallel** | Generate haiku + sonnet for one sport |
+| 🐍 **analyzer_agent.py** | Synthesizer | Python | **Sequential** (after Layer 3) | Compare all poems, create final report |
+
+### Two Paths to Configuration
+
+**Path A: 👤 Conversational (User + Claude)**
+```
+👤 User: "baseball, basketball, football with LLM mode"
+  → 🤖 Claude validates & creates: output/configs/config_20251103_225304.json
+  → 🐍 Run: python3 orchestrator.py --config output/configs/config_20251103_225304.json
+```
+
+**Path B: 🐍 Direct Python API (Scripting/Automation)**
+```python
+from config_builder import ConfigBuilder
+from datetime import datetime
+
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+ConfigBuilder() \
+    .with_sports(['baseball', 'basketball', 'football']) \
+    .with_generation_mode('llm') \
+    .save(f'output/configs/config_{timestamp}.json')
+# Then run: python3 orchestrator.py --config output/configs/config_TIMESTAMP.json
+```
+
+Both paths produce identical config files and identical workflow execution.
 
 ## Files
 
