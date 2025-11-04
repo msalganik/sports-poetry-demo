@@ -316,9 +316,9 @@ Default: yes
 - Accept: yes/no, true/false, y/n, 1/0, enable/disable
 - Default to true if not specified
 
-### Step 7: Configuration Summary
+### Step 7: Configuration Summary (REQUIRED)
 
-**Display before creating file:**
+**ALWAYS Display before creating file:**
 ```
 **Configuration Summary**
 
