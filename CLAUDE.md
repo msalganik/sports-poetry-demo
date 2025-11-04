@@ -96,7 +96,10 @@ sports_poetry_demo/
 ├── config.default.json      # Default configuration template (in git)
 ├── config.json              # Active runtime configuration (gitignored)
 ├── output/
+│   ├── configs/            # Pre-run configs (optional, for reuse)
+│   │   └── config_TIMESTAMP.json
 │   ├── {session_id}/       # Per-run isolated outputs
+│   │   ├── config.json     # Full config copy (session-specific)
 │   │   ├── {sport}/
 │   │   │   ├── haiku.txt
 │   │   │   ├── sonnet.txt
@@ -128,6 +131,7 @@ When users request to run the demo, Claude Code should:
    - llm config (only if generation_mode is "llm")
 5. The orchestrator will:
    - Generate unique session_id at runtime (format: `session_YYYYMMDD_HHMMSS_xxxxxx`)
+   - Copy full config to `output/{session_id}/config.json` (session-specific copy)
    - Create changelog in `output/{session_id}/config.changelog.json`
 
 **Usage pattern:**
@@ -145,6 +149,39 @@ builder.with_sports(["hockey", "swimming", "volleyball"])
 builder.with_generation_mode("llm")  # Auto-adds llm config
 builder.save()
 ```
+
+### Config File Storage Pattern
+
+The system uses a two-location pattern for config files:
+
+1. **Input Location** (optional):
+   - `config.json` in root directory OR
+   - `output/configs/config_TIMESTAMP.json` for named/reusable configs
+   - Used by orchestrator via `--config` flag
+
+2. **Session Copy** (automatic):
+   - Orchestrator copies input config to `output/{session_id}/config.json`
+   - Makes each session self-contained and reproducible
+   - Logged in execution_log.jsonl as `config_copied` event
+
+**Typical workflow:**
+```bash
+# Create config (saves to config.json by default)
+python3 config_builder.py interactive
+
+# Run orchestrator (reads config.json, copies to session)
+python3 orchestrator.py
+
+# Or with explicit config path
+python3 orchestrator.py --config output/configs/config_20251103_204829.json
+```
+
+**Self-contained sessions:**
+Each session directory contains everything needed to understand/reproduce the run:
+- `config.json` - Full configuration used
+- `config.changelog.json` - What changed from default
+- `execution_log.jsonl` - Complete audit trail
+- `{sport}/` - Generated poems and metadata
 
 ### Enabling LLM Mode
 
@@ -287,11 +324,12 @@ The `config.default.json` file provides a stable baseline for all configs:
 
 ## Important Implementation Details
 
-1. **Session Directory Creation**: Happens after config read (orchestrator.py:431) to ensure session_id is available
-2. **Log File Migration**: Early logs from root are moved to session directory (orchestrator.py:434-445)
-3. **Symlink Management**: `output/latest` always points to most recent session (orchestrator.py:124-127)
-4. **Thread Safety**: ProvenanceLogger uses threading.Lock for concurrent writes (orchestrator.py:27)
-5. **Metadata Tracking**: Each agent writes metadata.json with line counts, word counts, duration (poetry_agent.py:379-394)
+1. **Session Directory Creation**: Happens after config read (orchestrator.py:493) to ensure session_id is available
+2. **Config Copy**: Full config file copied to session directory (orchestrator.py:497-504) for self-contained sessions
+3. **Log File Migration**: Early logs from root are moved to session directory (orchestrator.py:515-523)
+4. **Symlink Management**: `output/latest` always points to most recent session (orchestrator.py:124-127)
+5. **Thread Safety**: ProvenanceLogger uses threading.Lock for concurrent writes (orchestrator.py:27)
+6. **Metadata Tracking**: Each agent writes metadata.json with line counts, word counts, duration (poetry_agent.py:379-394)
 
 ## Common Issues
 
