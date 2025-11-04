@@ -8,6 +8,7 @@ For this demo, we use template-based analysis.
 """
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -129,7 +130,7 @@ def generate_analysis_report(poems: List[Dict[str, Any]], session_dir: str = "ou
 
     report = []
     report.append("# Sports Poetry Analysis Report\n")
-    report.append(f"**Generated**: {Path('output').stat().st_mtime}\n")
+    report.append(f"**Report Generated**: {datetime.now(timezone.utc).isoformat()}\n")
     report.append(f"**Total Sports Analyzed**: {len(poems)}\n")
     report.append("\n---\n")
 
