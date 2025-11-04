@@ -9,6 +9,12 @@ Create and manage configuration files for sports poetry generation with complete
 
 This skill provides an interactive interface for creating configuration files for the sports poetry multi-agent workflow. It collects all required configuration parameters through natural language conversation and uses the `config_builder.py` Python API to validate and generate timestamped configuration files in the `output/configs/` directory.
 
+**This skill ALWAYS creates TWO files:**
+1. **config_{timestamp}.json** - The configuration file used by the orchestrator
+2. **generate_config_{timestamp}.py** - An executable Python script that can reproduce this configuration
+
+Both files use the same timestamp and are saved to `output/configs/`.
+
 ## When to Use This Skill
 
 - User wants to create a new configuration file
@@ -327,7 +333,8 @@ Default: yes
 🆔 Session ID:      {session_id} (auto-generated)
 ⏰ Timestamp:       {timestamp} (auto-generated)
 
-📁 Output file:     output/configs/config_{timestamp}.json
+📁 Output files:    output/configs/config_{timestamp}.json
+                    output/configs/generate_config_{timestamp}.py
 {if mode=llm:}
 ⏱️  Estimated time:  ~{count * 4} seconds ({count} sports × ~4s each)
 💰 API cost:        Free (using free tier model)
@@ -339,11 +346,17 @@ Proceed with this configuration? [yes/no/edit]
 ```
 
 **Actions:**
-- `yes`: Create configuration file
+- `yes`: Create both configuration files (JSON + generator script)
 - `no`: Cancel
 - `edit`: Ask which parameter to change and restart from that step
 
 ### Step 8: File Creation
+
+**CRITICAL: This step MUST create TWO files:**
+1. **config_{timestamp}.json** - The configuration file
+2. **generate_config_{timestamp}.py** - The executable generator script
+
+**BOTH files are REQUIRED for every configuration. Do NOT skip the generator script.**
 
 **Using config_builder.py to create both config JSON and generator script:**
 
@@ -787,6 +800,16 @@ If a config file already exists at the exact same second, a random suffix will b
 - swimming
 - gymnastics
 - track and field
+
+## CRITICAL REQUIREMENT: Always Create Both Files
+
+**When executing this skill, you MUST create BOTH files:**
+1. `output/configs/config_{timestamp}.json`
+2. `output/configs/generate_config_{timestamp}.py` (and make it executable with chmod +x)
+
+**Failure to create both files is considered an incomplete execution of this skill.**
+
+The generator script provides reproducibility and auditability. Without it, users cannot easily recreate configurations or track how they were generated.
 
 ## Dependencies
 
