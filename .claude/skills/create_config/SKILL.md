@@ -345,11 +345,14 @@ Proceed with this configuration? [yes/no/edit]
 
 ### Step 8: File Creation
 
-**Using config_builder.py:**
+**Using config_builder.py to create both config JSON and generator script:**
+
 ```python
 from config_builder import ConfigBuilder, ConfigValidationError
 from pathlib import Path
 from datetime import datetime
+import os
+import stat
 
 try:
     # Always start from default config
@@ -379,10 +382,82 @@ try:
     config_filename = f"config_{timestamp}.json"
     config_path = configs_dir / config_filename
 
+    # Generator script filename (matching timestamp)
+    generator_filename = f"generate_config_{timestamp}.py"
+    generator_path = configs_dir / generator_filename
+
     # Save configuration to output/configs directory
     builder.save(str(config_path))
 
-    print(f"✓ Successfully created {config_path}")
+    # Generate the Python script that created this config
+    script_content = f'''#!/usr/bin/env python3
+"""
+Configuration Generator Script
+Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+Output: {config_path}
+
+This script was created by the create_config skill to generate
+the sports poetry configuration with the following parameters:
+- Sports: {", ".join(sports_list)}
+- Generation Mode: {mode}
+{f"- Provider: {provider}" if mode == "llm" else ""}
+{f"- Model: {model}" if mode == "llm" else ""}
+- Retry Enabled: {retry_enabled}
+
+This script provides reproducibility and auditability for the configuration.
+You can re-run it to regenerate the same configuration with a new timestamp.
+"""
+
+from config_builder import ConfigBuilder
+from pathlib import Path
+from datetime import datetime
+
+# Load default configuration
+builder = ConfigBuilder.load_default()
+
+# Apply configuration settings
+builder.with_sports({sports_list!r})
+
+if {mode!r} != "template":
+    builder.with_generation_mode({mode!r})
+
+if {mode!r} == "llm":
+    if {provider!r} != "together":
+        builder.with_llm_provider({provider!r})
+    if {model!r} != "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free":
+        builder.with_llm_model({model!r})
+
+if not {retry_enabled!r}:
+    builder.with_retry({retry_enabled!r})
+
+# Create output directory
+configs_dir = Path("output/configs")
+configs_dir.mkdir(parents=True, exist_ok=True)
+
+# Generate new timestamped filename
+new_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+new_config_path = configs_dir / f"config_{{new_timestamp}}.json"
+
+# Save configuration
+builder.save(str(new_config_path))
+
+print(f"✓ Configuration saved to: {{new_config_path}}")
+print(f"\\nNext step: Run the orchestrator")
+print(f"  python3 orchestrator.py --config {{new_config_path}}")
+'''
+
+    # Write generator script to file
+    generator_path.write_text(script_content)
+
+    # Make script executable (chmod +x)
+    st = os.stat(generator_path)
+    os.chmod(generator_path, st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+    print(f"✓ Successfully created configuration files:")
+    print(f"  Config:    {config_path}")
+    print(f"  Generator: {generator_path}")
+    print(f"\nThe generator script provides reproducibility - you can re-run it")
+    print(f"to create the same configuration with a new timestamp.")
     print(f"\nNext step: Run the orchestrator with this config")
     print(f"  cd sports_poetry_demo")
     print(f"  python3 orchestrator.py --config {config_path}")
@@ -397,6 +472,28 @@ except Exception as e:
     print(f"❌ Unexpected error: {e}")
     print(f"Please report this issue.")
 ```
+
+**Generator Script Features:**
+
+1. **Matching Timestamp**: Script uses same timestamp as config file
+   - `config_20251103_222333.json`
+   - `generate_config_20251103_222333.py`
+
+2. **Self-Documenting Header**: Includes all configuration details in docstring
+   - Generation timestamp
+   - Output file path
+   - All parameter values
+   - Purpose and usage notes
+
+3. **Executable**: Script is automatically made executable (`chmod +x`)
+   - Can be run directly: `./generate_config_20251103_222333.py`
+   - Or with Python: `python3 generate_config_20251103_222333.py`
+
+4. **Reproducible**: Re-running the script creates a new config with fresh timestamp
+   - Same settings, new timestamp
+   - Useful for batch operations or CI/CD
+
+5. **Version Controlled**: Scripts are gitignored (see below) but can be committed if needed for auditability
 
 ## Usage Examples
 
@@ -416,7 +513,12 @@ Skill: Great! I'll create a configuration starting from defaults:
 
 User: "yes"
 
-Skill: ✓ Created output/configs/config_20251101_184500.json
+Skill: ✓ Successfully created configuration files:
+         Config:    output/configs/config_20251101_184500.json
+         Generator: output/configs/generate_config_20251101_184500.py
+
+       The generator script provides reproducibility - you can re-run it
+       to create the same configuration with a new timestamp.
 
        Next step: python3 orchestrator.py --config output/configs/config_20251101_184500.json
 ```
@@ -472,7 +574,12 @@ Skill: **Summary**
 
 User: "yes"
 
-Skill: ✓ Created output/configs/config_20251101_184500.json
+Skill: ✓ Successfully created configuration files:
+         Config:    output/configs/config_20251101_184500.json
+         Generator: output/configs/generate_config_20251101_184500.py
+
+       The generator script provides reproducibility - you can re-run it
+       to create the same configuration with a new timestamp.
 ```
 
 ### Example 3: Error Recovery
@@ -532,7 +639,11 @@ Skill: Switching to template mode...
 
 User: "yes"
 
-Skill: ✓ Created output/configs/config_20251101_184500.json with template mode
+Skill: ✓ Successfully created configuration files:
+         Config:    output/configs/config_20251101_184500.json
+         Generator: output/configs/generate_config_20251101_184500.py
+
+       Switched to template mode (no API key required).
 ```
 
 ## Error Handling
@@ -686,8 +797,32 @@ This skill requires:
 ## Notes
 
 - Config files are saved to `output/configs/config_{timestamp}.json`
-- Timestamp format: `YYYYMMDD_HHMMSS`
+- Generator scripts are saved to `output/configs/generate_config_{timestamp}.py`
+- Timestamp format: `YYYYMMDD_HHMMSS` (shared between config and generator script)
 - Each config gets a unique timestamped filename to prevent overwrites
+- Generator scripts are automatically made executable (`chmod +x`)
 - API keys are validated but never displayed or logged
 - The orchestrator must be run with `--config` flag pointing to the created file
 - All user inputs are normalized (lowercase, trimmed) for consistency
+
+## Version Control and .gitignore
+
+Generator scripts should typically be gitignored to avoid cluttering the repository with generated code. However, they can be committed if needed for auditability or compliance purposes.
+
+**Add to `.gitignore`:**
+```gitignore
+# Generated configuration scripts (auto-created by create_config skill)
+output/configs/generate_config_*.py
+```
+
+**Rationale:**
+- ✓ Generator scripts are reproducible from the config JSON
+- ✓ Prevents repository bloat with auto-generated files
+- ✓ Config JSON files remain committed for session reproducibility
+- ✓ Scripts can still be manually committed when needed (e.g., audit requirements)
+
+**When to commit generator scripts:**
+- Compliance/audit requirements need code provenance
+- Debugging configuration generation issues
+- Documenting complex configuration workflows
+- CI/CD pipelines that need reproducible config generation

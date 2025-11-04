@@ -25,6 +25,7 @@ ENV/
 Thumbs.db
 
 # Output and logs (generated at runtime)
+# Note: output/ includes generated config scripts (output/configs/generate_config_*.py)
 output/
 *.jsonl
 .coverage
