@@ -173,11 +173,11 @@ class TestConfigBuilder:
         with pytest.raises(ConfigValidationError, match="LLM model is required"):
             builder.validate()
 
-    def test_build_validates_config(self):
-        """Test that build validates the configuration."""
+    def test_validate_config(self):
+        """Test that validate validates the configuration."""
         builder = ConfigBuilder()
         builder.with_sports(["basketball", "soccer", "tennis"])
-        config = builder.build()
+        config = builder.validate()
         assert config["sports"] == ["basketball", "soccer", "tennis"]
         assert config["retry_enabled"] is True
         assert config["generation_mode"] == "template"
@@ -278,7 +278,7 @@ class TestConfigBuilder:
         builder.with_sports(["hockey", "soccer", "tennis"])
         builder.with_generation_mode("llm")
 
-        config = builder.build()
+        config = builder.validate()
         assert "llm" in config
         assert config["llm"]["provider"] == "together"
         assert "Llama" in config["llm"]["model"]
@@ -289,7 +289,7 @@ class TestConfigBuilder:
         builder.with_sports(["hockey", "soccer", "tennis"])
         builder.with_llm_provider("huggingface")
 
-        config = builder.build()
+        config = builder.validate()
         assert config["generation_mode"] == "llm"
         assert config["llm"]["provider"] == "huggingface"
 
@@ -298,7 +298,7 @@ class TestConfigBuilder:
         builder = ConfigBuilder()
         builder.with_sports(["hockey", "soccer", "tennis"])
 
-        config = builder.build()
+        config = builder.validate()
         assert config["generation_mode"] == "template"
         assert "llm" not in config
 
@@ -308,7 +308,7 @@ class TestConfigBuilder:
         builder.with_sports(["hockey", "soccer", "tennis"])
         builder.with_llm_model("custom-model")
 
-        config = builder.build()
+        config = builder.validate()
         assert config["generation_mode"] == "llm"
         assert config["llm"]["model"] == "custom-model"
 

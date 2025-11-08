@@ -265,8 +265,8 @@ find output -name "config.changelog.json" -exec jq 'select(.changes.sports) | {s
 
 ```python
 def save_with_changelog(self, config_path="config.json", reason=None, user="unknown"):
-    # 1. Build and validate new config
-    new_config = self.build()  # Includes session_id, timestamp
+    # 1. Validate new config
+    new_config = self.validate()  # Includes session_id, timestamp
 
     # 2. Load default config (always compare against this baseline)
     default_config = ConfigBuilder.load("config.default.json").config
