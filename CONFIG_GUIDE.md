@@ -413,7 +413,7 @@ from config_builder import ConfigBuilder, ConfigValidationError
 try:
     builder = ConfigBuilder()
     # ... configure ...
-    config = builder.build()  # Validates without saving
+    config = builder.validate()  # Validates without saving
     print("✓ Config valid")
     builder.save('config.json')
 except ConfigValidationError as e:

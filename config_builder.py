@@ -189,21 +189,9 @@ class ConfigBuilder:
 
         return self.config
 
-    def build(self) -> Dict[str, Any]:
-        """
-        Build and validate the configuration.
-
-        Returns:
-            The validated config dictionary
-
-        Raises:
-            ConfigValidationError: If validation fails
-        """
-        return self.validate()
-
     def save(self, path: str = "config.json") -> Path:
         """
-        Build, validate, and save the configuration to a file.
+        Validate and save the configuration to a file.
 
         Args:
             path: Path to save the config file
@@ -214,7 +202,7 @@ class ConfigBuilder:
         Raises:
             ConfigValidationError: If validation fails
         """
-        config = self.build()
+        config = self.validate()
         config_file_path = Path(path)
         with open(config_file_path, "w") as f:
             json.dump(config, f, indent=2)
