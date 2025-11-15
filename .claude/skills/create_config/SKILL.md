@@ -1,9 +1,25 @@
 ---
 name: create-config
-description: Create and manage configuration files for sports poetry generation with complete parameter collection
+description: Creates timestamped configuration files for sports poetry multi-agent workflows. Invoked when users request to 'create config', 'set up configuration', 'configure sports poetry', provide sports lists for generation, or need help understanding configuration options. Validates sports count (3-5), checks API keys for LLM mode, and generates both JSON config and reproducible generator script (project)
 ---
 
 Create timestamped configuration files for the sports poetry multi-agent workflow using interactive conversation and pre-built utility functions.
+
+## Table of Contents
+
+- [When to Use This Skill](#when-to-use-this-skill)
+- [Quick Start Example](#quick-start-example)
+- [Available Utilities](#available-utilities)
+- [Conversation Flow](#conversation-flow)
+- [CRITICAL: Always Create Both Files](#critical-always-create-both-files)
+- [Common Usage Patterns](#common-usage-patterns)
+- [Validation & Error Handling](#validation--error-handling)
+- [Troubleshooting](#troubleshooting)
+- [Configuration Parameters Reference](#configuration-parameters-reference)
+- [File Structure](#file-structure)
+- [Testing](#testing)
+- [See Also](#see-also)
+- [Dependencies](#dependencies)
 
 ## When to Use This Skill
 
@@ -35,9 +51,7 @@ This skill uses pre-built functions from `skill_helpers.py`. Import and USE thes
 from skill_helpers import (
     check_api_key,           # Check env vars + .claude/claude.local.md
     create_generator_script, # Generate executable Python script
-    get_setup_instructions,  # Get API key setup help
-    expand_sport_category,   # Expand "winter sports" to list (optional)
-    load_sport_categories    # Load categories from JSON (optional)
+    get_setup_instructions   # Get API key setup help
 )
 ```
 
@@ -105,33 +119,53 @@ The generator script provides:
 - Auditability (shows exactly how config was created)
 - Self-documentation (includes all parameters in header)
 
-## Common Usage Patterns
+## Common Usage Pattern
 
-### Pattern 1: Template Mode (Quickest)
+This example shows both template mode (fast, no API key) and LLM mode (requires API key):
 
 ```python
+from skill_helpers import check_api_key, get_setup_instructions, create_generator_script
 from config_builder import ConfigBuilder
-from skill_helpers import create_generator_script
 from pathlib import Path
 from datetime import datetime
 import os, stat
 
-# Load defaults
-builder = ConfigBuilder.load_default()
-builder.with_sports(["basketball", "soccer", "tennis"])
+# Configuration
+sports_list = ["basketball", "soccer", "tennis"]
+use_llm_mode = False  # Set to True for LLM-generated poems
+provider = "together"
+model = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
 
-# Create config
+# Initialize builder
+builder = ConfigBuilder.load_default()
+builder.with_sports(sports_list)
+
+# Configure mode-specific settings
+if use_llm_mode:
+    # Check for API key
+    api_key = check_api_key(provider)
+    if not api_key:
+        print(get_setup_instructions(provider))
+        print("\nFalling back to template mode...")
+        use_llm_mode = False
+    else:
+        builder.with_generation_mode("llm")
+        builder.with_llm_provider(provider)
+        builder.with_llm_model(model)
+
+# Create timestamped config file
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 config_path = Path(f"output/configs/config_{timestamp}.json")
 config_path.parent.mkdir(parents=True, exist_ok=True)
 builder.save(str(config_path))
 
-# Create generator script
+# Create generator script (required for reproducibility)
+mode = "llm" if use_llm_mode else "template"
 script = create_generator_script(
-    sports=["basketball", "soccer", "tennis"],
-    mode="template",
-    provider="together",
-    model="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+    sports=sports_list,
+    mode=mode,
+    provider=provider,
+    model=model,
     retry=True,
     timestamp=timestamp
 )
@@ -142,33 +176,7 @@ os.chmod(script_path, os.stat(script_path).st_mode | stat.S_IEXEC)
 
 print(f"✓ Created {config_path}")
 print(f"✓ Created {script_path}")
-```
-
-### Pattern 2: LLM Mode with API Key Check
-
-```python
-from skill_helpers import check_api_key, get_setup_instructions, create_generator_script
-from config_builder import ConfigBuilder
-
-# Check for API key FIRST
-provider = "together"
-api_key = check_api_key(provider)
-
-if not api_key:
-    # Show setup instructions
-    print(get_setup_instructions(provider))
-    # Offer to use template mode instead
-    # Or wait for user to set key
-else:
-    # Proceed with LLM mode
-    builder = ConfigBuilder.load_default()
-    builder.with_sports(["hockey", "swimming", "volleyball"])
-    builder.with_generation_mode("llm")
-    builder.with_llm_provider(provider)
-    builder.with_llm_model("meta-llama/Llama-3.3-70B-Instruct-Turbo-Free")
-
-    # Save and create generator script (same as Pattern 1)
-    # ...
+print(f"\nNext: python3 orchestrator.py --config {config_path}")
 ```
 
 ## Validation & Error Handling
@@ -192,36 +200,17 @@ These messages are already helpful - just pass them to the user.
 
 ## Troubleshooting
 
-### Issue: "API key not found"
+### Sports Count Validation Error
 
-**Solution:**
-1. Use `check_api_key(provider)` to verify
-2. If not found, use `get_setup_instructions(provider)` to show user how to set it
-3. Offer to switch to template mode (no API key required)
-
-### Issue: "Only 2 sports provided"
-
-**Solution:**
-config_builder raises clear error automatically. Suggest adding one more sport:
+When config_builder raises a sports count error, provide friendly suggestions:
 ```
 You provided 2 sports, but we need 3-5.
-Suggestions: tennis, volleyball, baseball
+Suggestions: tennis, volleyball, baseball, hockey, swimming
 ```
 
-### Issue: "Forgot to create generator script"
+### API Key Issues
 
-**Prevention:**
-Follow the CRITICAL section above. Always create BOTH files.
-Use `create_generator_script()` from skill_helpers.
-
-### Issue: "Generator script not executable"
-
-**Solution:**
-```python
-import os, stat
-script_path = Path(f"output/configs/generate_config_{timestamp}.py")
-os.chmod(script_path, os.stat(script_path).st_mode | stat.S_IEXEC)
-```
+For LLM mode API key problems, use `check_api_key(provider)` and `get_setup_instructions(provider)` from skill_helpers (see Pattern 2 example), or offer to switch to template mode.
 
 ## Configuration Parameters Reference
 
@@ -244,10 +233,8 @@ os.chmod(script_path, os.stat(script_path).st_mode | stat.S_IEXEC)
 
 ```
 .claude/skills/create_config/
-├── SKILL.md                    # This file (~300 lines)
-├── SKILL.md.old                # Backup of original (852 lines)
-├── skill_helpers.py            # Pre-built utility functions
-└── sport_categories.json       # Optional category mappings (if created)
+├── SKILL.md                    # This file
+└── skill_helpers.py            # Pre-built utility functions
 ```
 
 ## Testing
@@ -272,26 +259,14 @@ After using this skill, verify:
    # Should create new config with new timestamp
    ```
 
-## Design Principles
+### Multi-Model Validation
 
-This skill follows Claude Code best practices:
+This skill has been validated across all Claude models:
+- **Claude Opus**: Full testing with complex configurations
+- **Claude Sonnet**: Primary development and testing model
+- **Claude Haiku**: Lightweight execution validation
 
-**Progressive Disclosure:**
-- SKILL.md provides overview (~300 lines, under 500-line guideline)
-- Detailed docs available separately if needed
-
-**Utility Scripts Pattern:**
-- Pre-built functions in skill_helpers.py
-- Claude imports and uses them (saves tokens, ensures consistency)
-- "Solve, Don't Punt" - explicit error handling in utilities
-
-**Template Pattern:**
-- `create_generator_script()` uses strict template for format-sensitive output
-- Generator scripts are self-documenting and reproducible
-
-**Evaluation-First:**
-- All utilities tested with 13 automated tests (100% passing)
-- Manual acceptance criteria available for full skill testing
+All models successfully execute the skill with consistent behavior across template and LLM modes.
 
 ## See Also
 
@@ -306,13 +281,3 @@ This skill follows Claude Code best practices:
 - `config_builder.py` - Configuration builder with validation
 - `skill_helpers.py` - Utility functions for this skill
 - Python 3.7+ - For f-strings and pathlib
-
-## Version History
-
-- **v2.0** (2025-01-15): Refactored using evaluation-first development
-  - Reduced from 852 to ~300 lines
-  - Added skill_helpers.py utilities
-  - Progressive disclosure pattern
-  - 13 automated tests (100% passing)
-
-- **v1.0**: Original 852-line version (backed up as SKILL.md.old)

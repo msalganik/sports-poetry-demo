@@ -82,55 +82,6 @@ def check_api_key(provider: str) -> Optional[str]:
     return None
 
 
-def load_sport_categories() -> Dict[str, List[str]]:
-    """
-    Load sport categories from sport_categories.json.
-
-    This provides a reusable mapping of category names to sport lists,
-    allowing users to say "winter sports" instead of listing each sport.
-
-    Returns:
-        Dictionary mapping category names to lists of sports
-
-    Example:
-        >>> categories = load_sport_categories()
-        >>> categories["winter_sports"]
-        ['hockey', 'skiing', 'snowboarding', 'figure skating', 'curling']
-    """
-    categories_path = Path(__file__).parent / "sport_categories.json"
-
-    if not categories_path.exists():
-        # Return empty dict if file doesn't exist (graceful degradation)
-        return {}
-
-    return json.loads(categories_path.read_text())
-
-
-def expand_sport_category(category: str) -> List[str]:
-    """
-    Expand a category name (e.g., "winter sports") to a list of specific sports.
-
-    Args:
-        category: Category name (e.g., "winter sports", "ball sports")
-
-    Returns:
-        List of sports in that category, or empty list if category not found
-
-    Example:
-        >>> expand_sport_category("winter sports")
-        ['hockey', 'skiing', 'snowboarding', 'figure skating', 'curling']
-
-        >>> expand_sport_category("unknown category")
-        []
-    """
-    categories = load_sport_categories()
-
-    # Normalize category name: lowercase, replace spaces with underscores
-    category_key = category.lower().replace(" ", "_")
-
-    return categories.get(category_key, [])
-
-
 def create_generator_script(
     sports: List[str],
     mode: str,
@@ -320,29 +271,8 @@ if __name__ == "__main__":
             print(f"  ✗ {provider}: Not found")
     print()
 
-    # Test 2: Sport categories (if file exists)
-    print("Test 2: Sport categories")
-    categories = load_sport_categories()
-    if categories:
-        print(f"  ✓ Loaded {len(categories)} categories")
-        for cat_name in list(categories.keys())[:3]:
-            print(f"    - {cat_name}: {len(categories[cat_name])} sports")
-    else:
-        print("  ⚠ No categories file found (optional)")
-    print()
-
-    # Test 3: Category expansion
-    print("Test 3: Category expansion")
-    test_category = "winter_sports"
-    sports = expand_sport_category("winter sports")
-    if sports:
-        print(f"  ✓ 'winter sports' → {len(sports)} sports: {', '.join(sports[:3])}...")
-    else:
-        print(f"  ⚠ 'winter sports' → no expansion (file may not exist)")
-    print()
-
-    # Test 4: Generator script creation
-    print("Test 4: Generator script creation")
+    # Test 2: Generator script creation
+    print("Test 2: Generator script creation")
     script = create_generator_script(
         sports=["basketball", "soccer", "tennis"],
         mode="template",
@@ -363,8 +293,8 @@ if __name__ == "__main__":
         print(f"  ✗ Invalid Python: {e}")
     print()
 
-    # Test 5: Setup instructions
-    print("Test 5: Setup instructions")
+    # Test 3: Setup instructions
+    print("Test 3: Setup instructions")
     instructions = get_setup_instructions("together")
     print(f"  ✓ Generated instructions ({len(instructions)} chars)")
     print(f"    - Contains signup URL: {'https://together.ai/' in instructions}")
