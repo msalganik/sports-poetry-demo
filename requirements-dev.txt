@@ -10,3 +10,6 @@ pytest-cov>=4.1.0          # Coverage reporting
 pytest-xdist>=3.3.0        # Parallel test execution
 pytest-mock>=3.11.0        # Mocking utilities
 pytest-timeout>=2.1.0      # Prevent hanging tests
+
+# API testing (for E2E API simulation tests)
+anthropic>=0.40.0          # Anthropic SDK for testing Claude behavior
