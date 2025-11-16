@@ -85,7 +85,7 @@ def test_claude_recognizes_skill():
 **Recommended mix for this project:**
 - 70% Unit tests (test_create_config_skill.py)
 - 20% Integration tests (test_e2e_output_validation.py)
-- 5% API simulation (test_e2e_api_simulation.py - run before releases)
+- 5% API simulation (test_e2e_api_simulation.py, test_skill_e2e_complete.py - run before releases)
 - 5% Manual testing (acceptance criteria - run before major changes)
 
 ## Approach 1: Output Validation
@@ -157,7 +157,9 @@ pytest tests/test_e2e_output_validation.py --cov=.claude/skills/create_config
 
 ## Approach 2: API Simulation
 
-**File**: `tests/test_e2e_api_simulation.py`
+**Files**:
+- `tests/test_e2e_api_simulation.py` - Basic Claude behavior validation
+- `tests/test_skill_e2e_complete.py` - Comprehensive end-to-end workflow tests
 
 Tests Claude's actual decision-making using the Anthropic API.
 
@@ -171,8 +173,9 @@ Tests Claude's actual decision-making using the Anthropic API.
 ✗ Actual file creation (requires tool execution)
 ✗ Complex multi-turn conversations (expensive)
 
-### Example Test
+### Example Tests
 
+**Basic Recognition Test** (test_e2e_api_simulation.py):
 ```python
 @pytest.mark.api  # Mark as API test
 def test_claude_recognizes_skill_trigger(self, anthropic_client, skill_context):
@@ -193,6 +196,30 @@ def test_claude_recognizes_skill_trigger(self, anthropic_client, skill_context):
     # Claude should recognize this as config creation
     assert "config" in response_text
     assert any(sport in response_text for sport in ["basketball", "soccer", "tennis"])
+```
+
+**Comprehensive Workflow Test** (test_skill_e2e_complete.py):
+```python
+@pytest.mark.api
+def test_validation_error_recovery(self, anthropic_client, skill_context):
+    """Test multi-turn conversation with validation error recovery."""
+
+    # Turn 1: Invalid request (only 2 sports)
+    response1 = anthropic_client.messages.create(...)
+    assert any(keyword in response1_text.lower()
+               for keyword in ["3", "more", "additional"])
+
+    # Turn 2: User adds another sport
+    response2 = anthropic_client.messages.create(
+        messages=[
+            {"role": "user", "content": "Create a config for tennis and golf"},
+            {"role": "assistant", "content": response1_text},
+            {"role": "user", "content": "Add baseball"}
+        ]
+    )
+
+    # Claude should proceed after correction
+    assert "config" in response2_text.lower()
 ```
 
 ### Setup Requirements
@@ -603,9 +630,10 @@ def test_error_when_no_api_key():
 
 ### Related Documentation
 
-- `tests/test_create_config_skill.py`: Unit tests for skill
-- `tests/test_e2e_output_validation.py`: Integration tests (Approach 1)
-- `tests/test_e2e_api_simulation.py`: API simulation tests (Approach 2)
+- `tests/test_create_config_skill.py`: Unit tests for skill (11 tests)
+- `tests/test_e2e_output_validation.py`: Integration tests (Approach 1, 4 tests)
+- `tests/test_e2e_api_simulation.py`: Basic API simulation tests (Approach 2, 4 tests)
+- `tests/test_skill_e2e_complete.py`: Comprehensive E2E API tests (Approach 2, 7 tests)
 - `.claude/skills/create_config/SKILL.md`: Skill documentation
 
 ### Learning Resources
