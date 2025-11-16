@@ -8,6 +8,14 @@ Related: Issue #18 - Add comprehensive E2E API tests for create_config skill
 
 Cost per test run: ~$0.05-0.25 depending on model selection
 Run before releases: pytest -m api tests/test_skill_e2e_complete.py -v -s
+
+SCOPE NOTE: These tests validate Claude's conversation behavior and decision-making,
+not actual file creation. Testing actual tool execution would require:
+- Tool execution environment (sandbox)
+- Multi-turn conversation with tool calls
+- Complex Claude Code internal infrastructure
+
+For file output validation, see: tests/test_e2e_output_validation.py
 """
 
 import pytest
@@ -236,7 +244,7 @@ The skill requires 3-5 sports. If users provide fewer, explain the issue and ask
         print(f"📊 Total cost (2 turns): ~${total_cost:.4f}")
         print("="*80)
 
-    def test_missing_api_key_handling(self, anthropic_client, skill_context, monkeypatch):
+    def test_missing_api_key_handling(self, anthropic_client, skill_context):
         """
         Test: LLM mode request without API key.
 
@@ -246,7 +254,9 @@ The skill requires 3-5 sports. If users provide fewer, explain the issue and ask
         Cost: ~$0.01 with Sonnet
         Related: Issue #18, Test 4
 
-        Note: This simulates the missing key scenario through the prompt.
+        Note: This simulates the missing key scenario through the prompt rather than
+        actually manipulating environment variables, which is why we don't need monkeypatch.
+        We're testing Claude's response to the simulated scenario, not the actual key checking.
         """
         print("\n" + "="*80)
         print("TEST: Missing API Key Handling")
