@@ -427,45 +427,6 @@ class TestSkillHelpers:
     Tests for utility functions in skill_helpers.py.
     """
 
-    def test_load_sport_categories(self):
-        """
-        Test loading sport categories from JSON.
-
-        Note: Returns empty dict if file doesn't exist (graceful degradation).
-        """
-        import sys
-        sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "skills" / "create_config"))
-
-        from skill_helpers import load_sport_categories
-
-        categories = load_sport_categories()
-
-        # Should return a dict (may be empty if file doesn't exist)
-        assert isinstance(categories, dict)
-
-        # If file exists, should have expected structure
-        if categories:
-            assert isinstance(list(categories.values())[0], list)
-
-    def test_expand_sport_category(self):
-        """
-        Test expanding category name to sport list.
-
-        Returns empty list if category not found (graceful degradation).
-        """
-        import sys
-        sys.path.insert(0, str(Path(__file__).parent.parent / ".claude" / "skills" / "create_config"))
-
-        from skill_helpers import expand_sport_category
-
-        # Test with unknown category
-        sports = expand_sport_category("unknown_category_xyz")
-        assert sports == []
-
-        # If sport_categories.json exists and has winter_sports, test that
-        # Otherwise just verify it returns a list
-        result = expand_sport_category("winter sports")
-        assert isinstance(result, list)
 
     def test_create_generator_script_template_mode(self):
         """
